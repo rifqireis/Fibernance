@@ -1,0 +1,17 @@
+# Folder berat & Dependencies
+node_modules/
+frontend/node_modules/
+backend/venv_linux/
+backend/__pycache__/
+venv_linux/
+.venv/
+__pycache__/
+*.py[cod]
+
+# File Log & Env (Rahasia)
+*.log
+.env
+
+# Build files
+dist/
+build/

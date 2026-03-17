@@ -44,7 +44,9 @@ class DigSaldoResponse(BaseModel):
     """Response schema for Digiflazz balance check."""
 
     status: str
-    saldo: str  # Balance from Digiflazz (usually in format "Rp XX.XXX.XXX")
+    saldo: str
+    saldo_formatted: str = ""  # Tambahkan baris ini
+    timestamp: str = ""        # Tambahkan baris ini juga
 
 
 @router.post("/topup", response_model=TopupHistoryResponse)

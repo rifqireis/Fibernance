@@ -16,6 +16,7 @@ import hashlib
 import os
 import threading
 import time
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -24,6 +25,7 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 
+logger = logging.getLogger(__name__)
 
 class DigiflazzService:
     """Service for Digiflazz API integration (2026 specs compliant)."""
@@ -146,6 +148,20 @@ class DigiflazzService:
             response.raise_for_status()
             
             api_response = response.json()
+
+            # --- TAMBAHKAN VALIDASI INI ---
+            # Jika response.json() mengembalikan string, berarti ada masalah 
+            # pada format data yang dikirim (kemungkinan error dari proxy/API)
+            if isinstance(api_response, str):
+                logger.error(f"❌ API mengirim teks mentah, bukan objek JSON: {api_response}")
+                # Kita ubah menjadi dict kosong agar baris selanjutnya tidak crash
+                api_response = {} 
+            
+            # Validasi jika data tidak ada (biasanya karena IP ditolak/pembatasan akses)
+            if not api_response.get("data"):
+                error_msg = api_response.get("message", "Data 'data' tidak ditemukan dalam respon")
+                logger.warning(f"⚠️ Respon tidak lengkap dari Digiflazz: {api_response}")
+            # ------------------------------
             
             # Extract deposit value from nested response structure
             # Digiflazz returns: {"data": {"deposit": 8300}}

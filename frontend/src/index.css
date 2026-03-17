@@ -1,0 +1,320 @@
+/* Global Styles - Fibernance Minimalist Luxury Theme */
+
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-black font-sans;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+/* Serif: Headings & Large Numbers */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-serif font-semibold leading-tight;
+}
+
+h1 {
+  @apply text-4xl;
+}
+
+h2 {
+  @apply text-3xl;
+}
+
+h3 {
+  @apply text-2xl;
+}
+
+h4 {
+  @apply text-xl;
+}
+
+h5 {
+  @apply text-lg;
+}
+
+h6 {
+  @apply text-base;
+}
+
+/* Body Text */
+p {
+  @apply text-base leading-relaxed text-charcoal;
+}
+
+
+
+/* Links */
+a {
+  @apply text-black underline transition-colors duration-200 hover:text-gray-700;
+}
+
+a:visited {
+  @apply text-charcoal;
+}
+
+/* ============================================
+   FORM ELEMENTS
+   ============================================ */
+
+input,
+textarea,
+select,
+button {
+  @apply font-sans;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-sm bg-white text-black placeholder-gray-500 transition-colors duration-200;
+  @apply focus:outline-none focus:ring-1 focus:ring-black focus:border-black;
+}
+
+input[type="text"]:disabled,
+input[type="email"]:disabled,
+input[type="password"]:disabled,
+input[type="number"]:disabled,
+textarea:disabled,
+select:disabled {
+  @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+
+button {
+  @apply relative cursor-pointer transition-all duration-200;
+  @apply focus:outline-none focus:ring-1 focus:ring-offset-2 focus:ring-black;
+}
+
+/* Primary Button */
+.btn-primary {
+  @apply px-6 py-2 bg-black text-white rounded-sm font-medium;
+  @apply hover:bg-charcoal active:scale-95;
+}
+
+/* Secondary Button */
+.btn-secondary {
+  @apply px-6 py-2 border border-gray-300 bg-white text-black rounded-sm font-medium;
+  @apply hover:border-black hover:bg-gray-50 active:scale-95;
+}
+
+/* Ghost Button */
+.btn-ghost {
+  @apply px-6 py-2 bg-transparent text-black rounded-sm font-medium;
+  @apply hover:bg-gray-100 active:scale-95;
+}
+
+/* Disabled Button */
+button:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+/* ============================================
+   CARDS & CONTAINERS
+   ============================================ */
+
+.card {
+  @apply bg-white border border-gray-300 rounded-sm p-6;
+}
+
+.card-sm {
+  @apply bg-white border border-gray-300 rounded-sm p-4;
+}
+
+.card-lg {
+  @apply bg-white border border-gray-300 rounded-sm p-8;
+}
+
+/* ============================================
+   TABLES
+   ============================================ */
+
+table {
+  @apply w-full border-collapse;
+}
+
+thead {
+  @apply border-b border-gray-300 bg-gray-50;
+}
+
+th {
+  @apply px-4 py-3 text-left text-sm font-semibold text-charcoal;
+}
+
+tbody tr {
+  @apply border-b border-gray-200 hover:bg-gray-50 transition-colors duration-150;
+}
+
+td {
+  @apply px-4 py-3 text-sm text-charcoal;
+}
+
+/* ============================================
+   STATUS INDICATORS (No Colors, Use Dots)
+   ============================================ */
+
+/* Status Dot */
+.status-dot {
+  @apply inline-block w-2 h-2 rounded-full;
+}
+
+.status-active {
+  @apply bg-black;
+}
+
+.status-inactive {
+  @apply bg-gray-400;
+}
+
+.status-pending {
+  @apply bg-gray-600;
+}
+
+.status-warning {
+  @apply bg-gray-500;
+}
+
+/* Status Text Indicator */
+.status-badge {
+  @apply inline-block px-2 py-1 text-xs font-medium rounded-sm border border-gray-300 bg-white text-charcoal;
+}
+
+.status-badge.active {
+  @apply border-black text-black;
+}
+
+/* ============================================
+   UTILITY ANIMATIONS
+   ============================================ */
+
+/* Fade + Slide Up Animation (0.4s ease-out) */
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.4s ease-out forwards;
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stagger animations for lists */
+.animate-stagger > * {
+  @apply animate-fade-slide-up;
+  animation-fill-mode: both;
+}
+
+.animate-stagger > *:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.animate-stagger > *:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.animate-stagger > *:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.animate-stagger > *:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+.animate-stagger > *:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+/* ============================================
+   MAIN CONTAINER & LAYOUT
+   ============================================ */
+
+/* Root App Container - Full height, allows scroll */
+#root {
+  @apply min-h-screen bg-gray-50;
+}
+
+/* Main Content Area - Flex layout, full width */
+main {
+  @apply flex-1 w-full bg-white;
+}
+
+/* Sidebar - Fixed positioning with overflow handling */
+aside {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* ============================================
+   SCROLLBAR (Optional: Modern Minimalist)
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-white;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 rounded-sm;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  @apply outline-none ring-1 ring-offset-2 ring-black;
+}
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
