@@ -49,6 +49,65 @@ class DigSaldoResponse(BaseModel):
     timestamp: str = ""        # Tambahkan baris ini juga
 
 
+class WDPCheapestResponse(BaseModel):
+    """Response schema for cheapest WDP public prices."""
+
+    brazil: int | None = None
+    turkey: int | None = None
+    min: int | None = None
+    cached: bool = False
+    cache_age: int = 0
+    error: str | None = None
+
+
+@router.get("/wdp-cheapest", response_model=WDPCheapestResponse)
+async def get_wdp_cheapest() -> WDPCheapestResponse:
+    """
+    Get cheapest WDP (Weekly Diamond Pass) prices from public market.
+    
+    This endpoint fetches current market prices for WDP Brazil and Turkey
+    from the public Digiflazz API to help compare with internal cost prices.
+    
+    Uses 10-minute caching to prevent rate limiting and IP blocking.
+    
+    Returns:
+        WDPCheapestResponse: Public market prices for WDP variants
+        
+    Example response:
+        {
+            "brazil": 23500,
+            "turkey": 25000,
+            "min": 23500,
+            "cached": true,
+            "cache_age": 120
+        }
+    """
+    try:
+        logger.info("Fetching cheapest WDP prices from public API...")
+        
+        # CRITICAL: Wrap synchronous call in executor to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        wdp_prices = await loop.run_in_executor(
+            None,
+            digiflazz_service.get_wdp_cheapest_public,
+        )
+        
+        logger.info(f"✅ WDP prices fetched: {wdp_prices}")
+        return wdp_prices
+    
+    except Exception as e:
+        logger.error(f"❌ Error fetching WDP prices: {str(e)}")
+        # Return error response instead of raising exception
+        return {
+            "brazil": None,
+            "turkey": None,
+            "min": None,
+            "cached": False,
+            "cache_age": 0,
+            "error": str(e),
+        }
+
+
 @router.post("/topup", response_model=TopupHistoryResponse)
 async def create_topup(
     request: TopupRequest,

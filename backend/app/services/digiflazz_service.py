@@ -55,6 +55,11 @@ class DigiflazzService:
         self._cache_lock = threading.Lock()
         self._pricelist_cache = None
         self._pricelist_cache_time = 0
+        
+        # Cache for WDP cheapest public prices (10-minute TTL)
+        self._wdp_cheapest_cache = None
+        self._wdp_cheapest_cache_time = 0
+        self.WDP_CHEAPEST_CACHE_TTL = 600  # 10 minutes in seconds
 
     def _format_currency(self, amount: str) -> str:
         """
@@ -418,3 +423,153 @@ class DigiflazzService:
             raise Exception(f"Digiflazz get_product_list HTTP error: {str(e)}")
         except Exception as e:
             raise Exception(f"Digiflazz get_product_list error: {str(e)}")
+
+    def get_wdp_cheapest_public(self) -> dict:
+        """
+        Get cheapest WDP (Weekly Diamond Pass) prices from public Digiflazz API.
+        
+        This method fetches public market prices for WDP Brazil and Turkey variants
+        to help compare with internal cost prices. Uses 10-minute caching to prevent
+        rate limiting and IP blocking.
+        
+        API Endpoint: GET https://digiflazz.com/api/v1/product?search=weekly%20diamond%20pass
+        Method: GET (public endpoint, no authentication)
+        
+        Rate Limit: 10-minute cache (600 seconds) with thread-safe access
+        
+        Returns:
+            dict: Contains:
+                - brazil (int|null): Cheapest price for Brazil WDP
+                - turkey (int|null): Cheapest price for Turkey WDP
+                - min (int|null): Overall minimum between both
+                - cached (bool): Whether data came from cache
+                - cache_age (int): Cache age in seconds
+                
+        Example response:
+            {
+                "brazil": 23500,
+                "turkey": 25000,
+                "min": 23500,
+                "cached": True,
+                "cache_age": 45
+            }
+        """
+        try:
+            # Check cache with thread-safety
+            with self._cache_lock:
+                current_time = time.time()
+                
+                # Return cached data if still valid (within 10 minutes)
+                if (self._wdp_cheapest_cache is not None and 
+                    current_time - self._wdp_cheapest_cache_time < self.WDP_CHEAPEST_CACHE_TTL):
+                    cache_age = int(current_time - self._wdp_cheapest_cache_time)
+                    return {
+                        **self._wdp_cheapest_cache,
+                        "cached": True,
+                        "cache_age": cache_age,
+                    }
+            
+            # Cache expired or empty, fetch fresh data from public API
+            api_url = "https://digiflazz.com/api/v1/product"
+            params = {"search": "weekly diamond pass"}
+            
+            response = requests.get(
+                api_url,
+                params=params,
+                timeout=self.TIMEOUT,
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Initialize result
+            result = {
+                "brazil": None,
+                "turkey": None,
+                "min": None,
+            }
+            
+            # Parse products list - looking for WDP items with type Brazil and Turkey
+            if isinstance(data, dict) and "data" in data:
+                products = data.get("data", [])
+            elif isinstance(data, list):
+                products = data
+            else:
+                products = []
+            
+            # Extract lowest prices for each type
+            brazil_prices = []
+            turkey_prices = []
+            
+            for product in products:
+                if not isinstance(product, dict):
+                    continue
+                
+                product_type = str(product.get("type", "")).lower().strip()
+                lowest_price_str = product.get("lowest_price", product.get("price", ""))
+                
+                try:
+                    # Parse price - handle both string and int
+                    if isinstance(lowest_price_str, str):
+                        lowest_price = int(lowest_price_str.replace(".", "").replace(",", ""))
+                    else:
+                        lowest_price = int(lowest_price_str)
+                    
+                    if lowest_price > 0:  # Only consider positive prices
+                        if "brazil" in product_type or "br" in product_type:
+                            brazil_prices.append(lowest_price)
+                        elif "turkey" in product_type or "tr" in product_type:
+                            turkey_prices.append(lowest_price)
+                except (ValueError, AttributeError):
+                    # Skip items with invalid price format
+                    continue
+            
+            # Get minimum price for each region
+            if brazil_prices:
+                result["brazil"] = min(brazil_prices)
+            if turkey_prices:
+                result["turkey"] = min(turkey_prices)
+            
+            # Calculate overall minimum
+            valid_prices = [p for p in [result["brazil"], result["turkey"]] if p is not None]
+            if valid_prices:
+                result["min"] = min(valid_prices)
+            
+            # Update cache with thread-safety
+            with self._cache_lock:
+                self._wdp_cheapest_cache = result
+                self._wdp_cheapest_cache_time = time.time()
+            
+            return {
+                **result,
+                "cached": False,
+                "cache_age": 0,
+            }
+        
+        except requests.exceptions.Timeout as e:
+            return {
+                "brazil": None,
+                "turkey": None,
+                "min": None,
+                "error": f"Timeout fetching WDP prices: {str(e)}",
+                "cached": False,
+                "cache_age": 0,
+            }
+        except requests.exceptions.RequestException as e:
+            return {
+                "brazil": None,
+                "turkey": None,
+                "min": None,
+                "error": f"Request failed: {str(e)}",
+                "cached": False,
+                "cache_age": 0,
+            }
+        except Exception as e:
+            return {
+                "brazil": None,
+                "turkey": None,
+                "min": None,
+                "error": f"Error parsing WDP prices: {str(e)}",
+                "cached": False,
+                "cache_age": 0,
+            }

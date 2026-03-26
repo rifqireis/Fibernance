@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAccounts } from '../api/accounts';
 
 // SKU options
@@ -8,9 +8,156 @@ const SKU_PRODUCTS = [
   { sku: 'ML_86', label: '86 Diamonds' },
 ];
 
+// Type definitions
+interface WDPPrices {
+  brazil: number | null;
+  turkey: number | null;
+  min: number | null;
+  cached: boolean;
+  cache_age: number;
+  error?: string;
+}
+
+// WDP Price Card Component
+const WDPPriceCard: React.FC<{ prices: WDPPrices | null; isLoading: boolean }> = ({ prices, isLoading }) => {
+  // Hardcoded cost prices (can be replaced with SKU_PRODUCTS data later)
+  const WDP_BR_COST = 0;
+  const WDP_TR_COST = 0;
+
+  const formatRupiah = (value: number | null): string => {
+    if (value === null || value === undefined) return 'N/A';
+    return `Rp ${value.toLocaleString('id-ID')}`;
+  };
+
+  const calculateMargin = (cost: number, market: number | null): string => {
+    if (market === null || cost === 0) return '-';
+    const margin = ((market - cost) / cost * 100).toFixed(1);
+    return `${margin}%`;
+  };
+
+  return (
+    <div className="mt-8 pt-8 pb-8 border-t border-gray-200">
+      {/* Title */}
+      <p className="text-xs font-semibold text-gray-600 font-sans uppercase tracking-wide mb-4">
+        📊 Info Harga WDP Termurah
+      </p>
+
+      {isLoading ? (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-100">
+          <p className="text-sm text-gray-600 font-sans">Loading prices...</p>
+        </div>
+      ) : prices ? (
+        <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-indigo-50 rounded-lg p-6 border border-purple-200 shadow-sm">
+          {/* Brazil WDP Row */}
+          <div className="flex justify-between items-center py-3 border-b border-purple-200/50">
+            <div>
+              <p className="text-sm font-semibold text-gray-800 font-sans">Termurah Brazil (Pasaran)</p>
+              <p className="text-xs text-gray-600 font-sans mt-1">Harga publik terendah</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-semibold text-blue-700 font-serif">
+                {formatRupiah(prices.brazil)}
+              </p>
+            </div>
+          </div>
+
+          {/* Turkey WDP Row */}
+          <div className="flex justify-between items-center py-3 border-b border-purple-200/50">
+            <div>
+              <p className="text-sm font-semibold text-gray-800 font-sans">Termurah Turkey (Pasaran)</p>
+              <p className="text-xs text-gray-600 font-sans mt-1">Harga publik terendah</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-semibold text-purple-700 font-serif">
+                {formatRupiah(prices.turkey)}
+              </p>
+            </div>
+          </div>
+
+          {/* Cost Brazil Row */}
+          <div className="flex justify-between items-center py-3 border-b border-purple-200/50">
+            <div>
+              <p className="text-sm font-semibold text-gray-800 font-sans">Harga Modal WDP_BR</p>
+              <p className="text-xs text-gray-600 font-sans mt-1">
+                Margin: {calculateMargin(WDP_BR_COST, prices.brazil)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-semibold text-indigo-700 font-serif">
+                {formatRupiah(WDP_BR_COST)}
+              </p>
+            </div>
+          </div>
+
+          {/* Cost Turkey Row */}
+          <div className="flex justify-between items-center py-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-800 font-sans">Harga Modal WDP_TR</p>
+              <p className="text-xs text-gray-600 font-sans mt-1">
+                Margin: {calculateMargin(WDP_TR_COST, prices.turkey)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-semibold text-indigo-700 font-serif">
+                {formatRupiah(WDP_TR_COST)}
+              </p>
+            </div>
+          </div>
+
+          {/* Cache Info */}
+          <div className="mt-3 pt-3 border-t border-purple-200/50">
+            <p className="text-xs text-gray-500 font-sans">
+              {prices.cached ? `✓ Cached ${prices.cache_age}s ago` : '✓ Fresh data'}
+            </p>
+          </div>
+
+          {/* Error Message */}
+          {prices.error && (
+            <div className="mt-2 p-2 bg-red-50 rounded border border-red-200">
+              <p className="text-xs text-red-700 font-sans">{prices.error}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-100">
+          <p className="text-sm text-gray-600 font-sans">Unable to load prices</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const Digiflazz: React.FC = () => {
   const { data: accounts, isLoading } = useAccounts();
   const [activeTab, setActiveTab] = useState<'regular' | 'lunasi'>('regular');
+  const [wdpPrices, setWdpPrices] = useState<WDPPrices | null>(null);
+  const [wdpLoading, setWdpLoading] = useState(true);
+
+  // Fetch WDP prices on component mount
+  useEffect(() => {
+    const fetchWDPPrices = async () => {
+      try {
+        const response = await fetch('/api/digiflazz/wdp-cheapest');
+        const data = await response.json();
+        setWdpPrices(data);
+      } catch (error) {
+        console.error('Failed to fetch WDP prices:', error);
+        setWdpPrices({
+          brazil: null,
+          turkey: null,
+          min: null,
+          cached: false,
+          cache_age: 0,
+          error: 'Failed to fetch prices',
+        });
+      } finally {
+        setWdpLoading(false);
+      }
+    };
+
+    fetchWDPPrices();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -35,6 +182,9 @@ const Digiflazz: React.FC = () => {
             Last updated: 16 Mar 2026, 10:30 WIB
           </p>
         </div>
+
+        {/* WDP Price Info Card */}
+        <WDPPriceCard prices={wdpPrices} isLoading={wdpLoading} />
       </div>
 
       {/* Tab Navigation */}
