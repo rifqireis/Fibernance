@@ -15,6 +15,8 @@ const Orders: React.FC = () => {
   const [showReceipt, setShowReceipt] = useState(false);
   const [showVideoUpload, setShowVideoUpload] = useState(false);
   const [videoUploadOrder, setVideoUploadOrder] = useState<ComboOrderResponse | null>(null);
+  const [showDeliveryNotification, setShowDeliveryNotification] = useState(false);
+  const [deliveryNotificationOrder, setDeliveryNotificationOrder] = useState<ComboOrderResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,6 +44,11 @@ const Orders: React.FC = () => {
   const handlePrint = (order: ComboOrderResponse) => {
     setSelectedOrder(order);
     setShowReceipt(true);
+  };
+
+  const handleFinishPrint = (order: ComboOrderResponse) => {
+    setDeliveryNotificationOrder(order);
+    setShowDeliveryNotification(true);
   };
 
   // Countdown timer - update every second
@@ -567,6 +574,14 @@ const Orders: React.FC = () => {
                                 </button>
                               </>
                             )}
+                            {order.status === 'DONE' && (
+                              <button
+                                onClick={() => handleFinishPrint(order)}
+                                className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors rounded-none"
+                              >
+                                Finish Print
+                              </button>
+                            )}
                             <button
                               onClick={() => handlePrint(order)}
                               className="flex-1 px-3 py-2 text-xs font-semibold text-black border border-black hover:bg-gray-100 transition-colors rounded-none"
@@ -583,6 +598,17 @@ const Orders: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Delivery Notification Modal */}
+      {showDeliveryNotification && deliveryNotificationOrder && (
+        <DeliveryNotificationModal
+          order={deliveryNotificationOrder}
+          onClose={() => {
+            setShowDeliveryNotification(false);
+            setDeliveryNotificationOrder(null);
+          }}
+        />
+      )}
 
       {/* Receipt Modal */}
       {showReceipt && selectedOrder && (
@@ -606,6 +632,165 @@ const Orders: React.FC = () => {
           }}
         />
       )}
+    </div>
+  );
+};
+
+/**
+ * Delivery Notification Modal Component
+ * Displays pre-filled delivery notification message with copy and close buttons
+ */
+interface DeliveryNotificationModalProps {
+  order: ComboOrderResponse;
+  onClose: () => void;
+}
+
+const DeliveryNotificationModal: React.FC<DeliveryNotificationModalProps> = ({ order, onClose }) => {
+  const [language, setLanguage] = React.useState<'id' | 'en'>('id');
+
+  // Format date only (no time) for delivery notifications
+  // ID: DD/MM/YYYY
+  // EN: MM/DD/YYYY
+  const formatDeliveryDateOnly = (dateString: string | undefined): string => {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    let day = date.getDate();
+    let month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    
+    const dayStr = String(day).padStart(2, '0');
+    const monthStr = String(month).padStart(2, '0');
+    
+    if (language === 'id') {
+      return `${dayStr}/${monthStr}/${year}`;
+    } else {
+      return `${monthStr}/${dayStr}/${year}`;
+    }
+  };
+
+  // Generate delivery notification text with template variables
+  const generateDeliveryNotification = (): string => {
+    const item = `${order.quantity}x ${order.item_name}`;
+    const buyer = order.buyer_name;
+    const date = formatDeliveryDateOnly(order.delivery_at);
+    
+    if (language === 'id') {
+      return `Pesanan ${item} sudah dikirim. Terima kasih, ${buyer}.\n${date}`;
+    } else {
+      return `Order ${item} has been sent. Thank you, ${buyer}.\n${date}`;
+    }
+  };
+
+  const notificationText = generateDeliveryNotification();
+
+  const handleCopyText = async () => {
+    try {
+      await navigator.clipboard.writeText(notificationText);
+      alert(language === 'id' ? '✓ Pesan disalin!' : '✓ Message copied!');
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+      alert(language === 'id' ? 'Gagal menyalin pesan' : 'Failed to copy message');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-none max-h-[90vh] overflow-y-auto w-[90%] md:w-full max-w-sm shadow-lg">
+        {/* Modal Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-lg font-serif font-semibold text-black">
+            {language === 'id' ? 'Notifikasi Pengiriman' : 'Delivery Notification'}
+          </h2>
+          <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+            <button
+              onClick={() => setLanguage('id')}
+              className={`px-3 py-1 text-xs font-semibold rounded-none transition-colors ${
+                language === 'id'
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              ID
+            </button>
+            <button
+              onClick={() => setLanguage('en')}
+              className={`px-3 py-1 text-xs font-semibold rounded-none transition-colors ${
+                language === 'en'
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              EN
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-600 hover:text-black transition-colors text-xl ml-4"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Notification Content */}
+        <div className="p-6 space-y-4">
+          {/* Order Info */}
+          <div className="bg-gray-50 p-4 rounded-none border border-gray-200">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              {language === 'id' ? 'Pesanan' : 'Order'}
+            </p>
+            <p className="text-sm font-semibold text-black">{order.invoice_ref}</p>
+            <p className="text-sm text-gray-700">{order.quantity}x {order.item_name}</p>
+          </div>
+
+          {/* Notification Message Box */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              {language === 'id' ? 'Pesan Notifikasi' : 'Notification Message'}
+            </label>
+            <div className="bg-white border border-gray-300 rounded-none p-4">
+              <p 
+                className="text-sm text-black whitespace-pre-wrap font-mono"
+                style={{ lineHeight: '1.6' }}
+              >
+                {notificationText}
+              </p>
+            </div>
+          </div>
+
+          {/* Info Text */}
+          <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 px-4 py-3 rounded-none space-y-1">
+            <p>
+              {language === 'id' 
+                ? '• Salin pesan ini dan kirim kepada pembeli'
+                : '• Copy this message and send it to the buyer'
+              }
+            </p>
+            <p>
+              {language === 'id'
+                ? '• Gunakan di WhatsApp, SMS, atau media lainnya'
+                : '• Use on WhatsApp, SMS, or other media'
+              }
+            </p>
+          </div>
+        </div>
+
+        {/* Modal Footer - Action Buttons */}
+        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
+          <button
+            onClick={handleCopyText}
+            className="flex-1 px-4 py-2 bg-black text-white font-semibold text-sm hover:bg-charcoal transition-colors rounded-none"
+          >
+            {language === 'id' ? 'Copy' : 'Copy'}
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 text-black font-semibold text-sm hover:bg-gray-50 transition-colors rounded-none"
+          >
+            {language === 'id' ? 'Tutup' : 'Close'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -763,6 +948,40 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) => {
       const daysEN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const monthsEN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       return `${daysEN[dayOfWeek]}, ${dayNum} ${monthsEN[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr} UTC`;
+    }
+  };
+
+  // Format date only (no time) for delivery notifications
+  // ID: DD/MM/YYYY
+  // EN: MM/DD/YYYY
+  const formatDeliveryDateOnly = (dateString: string | undefined): string => {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    let day = date.getDate();
+    let month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    
+    const dayStr = String(day).padStart(2, '0');
+    const monthStr = String(month).padStart(2, '0');
+    
+    if (language === 'id') {
+      return `${dayStr}/${monthStr}/${year}`;
+    } else {
+      return `${monthStr}/${dayStr}/${year}`;
+    }
+  };
+
+  // Generate delivery notification text with template variables
+  const generateDeliveryNotification = (orderData: ComboOrderResponse): string => {
+    const item = `${orderData.quantity}x ${orderData.item_name}`;
+    const buyer = orderData.buyer_name;
+    const date = formatDeliveryDateOnly(orderData.delivery_at);
+    
+    if (language === 'id') {
+      return `Pesanan ${item} sudah dikirim. Terima kasih, ${buyer}.\n${date}`;
+    } else {
+      return `Order ${item} has been sent. Thank you, ${buyer}.\n${date}`;
     }
   };
 
