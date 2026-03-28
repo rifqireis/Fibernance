@@ -9,6 +9,8 @@ export interface ComboOrderPayload {
   buyer_name: string; // NEW: Name of buyer/customer
   item_name: string; // NEW: Name of product (e.g., Starlight Card)
   quantity: number; // NEW: Quantity of items
+  created_at?: string; // Optional - if omitted, backend uses current time (WIB)
+  order_id?: string; // Optional
 }
 
 export interface ComboOrderResponse {
@@ -25,7 +27,8 @@ export interface ComboOrderResponse {
   status: string;
   deduction_breakdown: Record<string, number>;
   sending_accounts: Record<string, any>;
-  delivery_at: string; // ISO 8601 datetime
+  delivery_at: string; // ISO 8601 datetime (RECEIPT/STRUK TIME - jam 15:00 WIB)
+  actual_delivery_at: string; // ISO 8601 datetime (ACTUAL ORDER TIME - +7 hari real time)
   proof_video_link?: string; // Telegram URL for proof video delivery
   created_at: string;
   updated_at: string;

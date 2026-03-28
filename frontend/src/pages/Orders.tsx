@@ -75,39 +75,22 @@ const Orders: React.FC = () => {
     }
   };
 
-  // Format datetime to WIB (UTC+7) timezone
-  const formatDateTimeInWIB = (utcDateString: string | undefined): string => {
-    if (!utcDateString) return 'N/A';
+  // Format datetime - backend sends naive ISO datetime in WIB format (no conversion needed)
+  const formatDateTimeInWIB = (dateString: string | undefined): string => {
+    if (!dateString) return 'N/A';
     
-    // Parse the UTC ISO string
-    const utcDate = new Date(utcDateString);
+    // Backend sends naive ISO datetime string in WIB format (e.g., "2026-04-04T15:00:00")
+    // Parse directly using local date parsing (no UTC conversion)
+    const date = new Date(dateString);
     
-    // Extract UTC components
-    let day = utcDate.getUTCDate();
-    let month = utcDate.getUTCMonth();
-    let year = utcDate.getUTCFullYear();
-    let hours = utcDate.getUTCHours();
-    const minutes = utcDate.getUTCMinutes();
+    // Extract components - already in correct WIB time
+    let day = date.getDate();
+    let month = date.getMonth();
+    let year = date.getFullYear();
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
     
-    // Add 7 hours for WIB timezone
-    hours += 7;
-    
-    // Handle day overflow (if hours >= 24)
-    if (hours >= 24) {
-      hours -= 24;
-      day += 1;
-      
-      // Handle month/year overflow
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      if (day > daysInMonth) {
-        day = 1;
-        month += 1;
-        if (month > 11) {
-          month = 0;
-          year += 1;
-        }
-      }
-    }
+    // No timezone adjustment needed - backend already sends WIB
     
     // Format with month names
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -157,9 +140,9 @@ const Orders: React.FC = () => {
     
     switch (sortBy) {
       case 'date-desc':
-        return sorted.sort((a, b) => new Date(b.delivery_at).getTime() - new Date(a.delivery_at).getTime());
+        return sorted.sort((a, b) => new Date(b.actual_delivery_at).getTime() - new Date(a.actual_delivery_at).getTime());
       case 'date-asc':
-        return sorted.sort((a, b) => new Date(a.delivery_at).getTime() - new Date(b.delivery_at).getTime());
+        return sorted.sort((a, b) => new Date(a.actual_delivery_at).getTime() - new Date(b.actual_delivery_at).getTime());
       case 'item':
         return sorted.sort((a, b) => a.item_name.localeCompare(b.item_name));
       case 'diamond':
@@ -441,7 +424,7 @@ const Orders: React.FC = () => {
                           {/* Countdown Timer - Right side */}
                           {order.status === 'PENDING' && (
                             <div className="text-xs font-semibold text-white bg-black px-2 py-1 rounded-none whitespace-nowrap">
-                              {calculateCountdown(order.delivery_at)}
+                              {calculateCountdown(order.actual_delivery_at)}
                             </div>
                           )}
                         </div>
@@ -478,7 +461,7 @@ const Orders: React.FC = () => {
 
                       {/* Row 4: Pengiriman Time (Compact) */}
                       <div className="text-xs text-gray-600">
-                        📦 {formatDeliveryDate(order.delivery_at)}
+                        📦 {formatDeliveryDate(order.actual_delivery_at)}
                       </div>
                     </button>
 
@@ -543,7 +526,7 @@ const Orders: React.FC = () => {
                         {/* Delivery Information */}
                         <div>
                           <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Estimasi Pengiriman</p>
-                          <p className="text-sm text-black">{formatDeliveryDate(order.delivery_at)}</p>
+                          <p className="text-sm text-black">{formatDeliveryDate(order.actual_delivery_at)}</p>
                         </div>
 
                         {/* Order Status */}

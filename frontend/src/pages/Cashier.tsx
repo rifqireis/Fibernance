@@ -247,7 +247,7 @@ const Cashier: React.FC = () => {
         buyer_name: buyerName,
         item_name: itemName,
         quantity: quantity,
-        created_at: new Date().toISOString(),
+        // created_at omitted - backend uses datetime.now() for WIB timezone
       });
 
       alert('✅ Order processed successfully!');

@@ -13,6 +13,27 @@ export interface ExportData {
   orders: any[];
 }
 
+export interface OrderExportData {
+  id: string;
+  invoice_ref: string;
+  order_id: string;
+  target_id: string;
+  server_id: string;
+  buyer_name: string;
+  game_username: string;
+  item_name: string;
+  quantity: number;
+  total_diamond: number;
+  status: string;
+  deduction_breakdown: Record<string, number>;
+  sending_accounts: Record<string, any>;
+  proof_video_link?: string;
+  delivery_at: string | null;  // Receipt/Struk time (jam 15:00)
+  actual_delivery_at: string | null;  // Order real time (+7 hari)
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ImportPreview {
   data_type: string;
   records_to_delete: number;

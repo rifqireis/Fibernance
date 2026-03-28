@@ -7,8 +7,74 @@ from sqlmodel import select
 from app.core.models import Account, Order
 
 
+def calculate_receipt_delivery_at(created_at: datetime) -> datetime:
+    """
+    Calculate delivery time for RECEIPT/STRUK printing (MARKUP TIME).
+    
+    Markup logic untuk prevent komplain pembeli:
+    - Jika order < 15:00 WIB: delivery = +7 hari pada jam 15:00 WIB
+    - Jika order >= 15:00 WIB: delivery = +8 hari pada jam 15:00 WIB
+    
+    Catatan: Input created_at SUDAH dalam format WIB dari client, TIDAK ADA KONVERSI
+    
+    Args:
+        created_at: Order creation timestamp (WIB format, naive datetime dari client)
+    
+    Returns:
+        datetime: Delivery timestamp with jam set to 15:00:00 WIB (receipt markup time)
+        
+    Example:
+        - Order dibuat 14:00 WIB → Struk tunjukkan: +7 hari jam 15:00 WIB
+        - Order dibuat 16:00 WIB → Struk tunjukkan: +8 hari jam 15:00 WIB
+    """
+    # Input SUDAH WIB, extract jam (0-23) langsung
+    hour_wib = created_at.hour
+    
+    # Tentukan berapa hari ditambah
+    if hour_wib < 15:
+        # Sebelum cutoff 15:00 WIB: +7 hari
+        days_to_add = 7
+    else:
+        # Sesudah cutoff 15:00 WIB: +8 hari
+        days_to_add = 8
+    
+    # Hitung delivery: +7 atau +8 hari, JAM DI-SET KE 15:00:00 WIB
+    delivery_wib = created_at + timedelta(days=days_to_add)
+    # Replace jam menjadi 15:00:00 untuk markup struk
+    delivery_wib = delivery_wib.replace(hour=15, minute=0, second=0, microsecond=0)
+    
+    return delivery_wib
+
+
+def calculate_order_delivery_at(created_at: datetime) -> datetime:
+    """
+    Calculate delivery time for ORDER DATA (REAL DELIVERY TIME).
+    
+    Logika sederhana untuk data aktual pesanan:
+    - Perhitungan: +7 hari dari waktu order
+    - Preserve jam:menit:detik dari waktu order
+    - Input SUDAH dalam format WIB dari client
+    
+    Args:
+        created_at: Order creation timestamp (WIB format, naive datetime dari client)
+    
+    Returns:
+        datetime: Delivery timestamp (+7 hari, jam:menit:detik sama dengan order creation)
+        
+    Example:
+        - Order dibuat 14:30 WIB → Delivery: +7 hari jam 14:30 WIB
+        - Order dibuat 16:45 WIB → Delivery: +7 hari jam 16:45 WIB
+    """
+    # Simple calculation: +7 hari, preserve jam:menit:detik
+    delivery_wib = created_at + timedelta(days=7)
+    
+    return delivery_wib
+
+
 def calculate_delivery_at(created_at: datetime) -> datetime:
     """
+    DEPRECATED: Use calculate_receipt_delivery_at() or calculate_order_delivery_at() instead.
+    
     Calculate expected delivery_at based on 15:00 WIB (08:00 UTC) cutoff.
     
     Logic:
@@ -100,10 +166,10 @@ async def create_combo_order(
 
     # Use provided created_at (from client) or fallback to server time
     if created_at is None:
-        created_at = datetime.utcnow()
-    elif created_at.tzinfo is None:
-        # Make naive datetime timezone-aware (UTC)
-        created_at = created_at.replace(tzinfo=timezone.utc)
+        created_at = datetime.now()  # Changed: datetime.utcnow() → datetime.now() (WIB from client)
+    elif created_at.tzinfo is not None:
+        # If timezone-aware, make it naive (treat as WIB)
+        created_at = created_at.replace(tzinfo=None)
     
     # Validate input
     if total_diamond <= 0:
@@ -163,10 +229,20 @@ async def create_combo_order(
             "deduction": deduction_breakdown[account.name],
         }
 
-    # Calculate delivery_at based on 15:00 WIB cutoff (using client-provided created_at timestamp)
-    delivery_at = calculate_delivery_at(created_at)
+    # Calculate delivery_at for RECEIPT/STRUK (markup time dengan jam 15:00 WIB)
+    # Fungsi ini untuk catatan pembeli dan prevent komplain
+    delivery_at = calculate_receipt_delivery_at(created_at)
+    
+    # Calculate actual_delivery_at for ORDER DATA (real +7 days from order creation)
+    # This is the actual delivery time shown on Orders page
+    actual_delivery_at = calculate_order_delivery_at(created_at)
+    
+    # NOTE: 
+    # - delivery_at = Receipt/Struk time (markup dengan jam 15:00)
+    # - actual_delivery_at = Order real time (+7 hari dari order creation)
 
     # Create Order record with PENDING status (manual gift, no Digiflazz)
+    # IMPORTANT: Set created_at explicitly to preserve WIB time (not use default utcnow)
     order = Order(
         invoice_ref=invoice_ref,
         target_id=target_id,
@@ -178,7 +254,10 @@ async def create_combo_order(
         status="PENDING",
         deduction_breakdown=deduction_breakdown,
         sending_accounts=sending_accounts,
-        delivery_at=delivery_at,
+        delivery_at=delivery_at,  # Receipt/Struk time (jam 15:00)
+        actual_delivery_at=actual_delivery_at,  # Order real time (+7 hari)
+        created_at=created_at,  # Explicitly set to when order was created (WIB)
+        updated_at=created_at,  # Same as created_at at order creation time
     )
     session.add(order)
 

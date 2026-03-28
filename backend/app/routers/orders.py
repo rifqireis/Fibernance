@@ -66,7 +66,7 @@ class ComboOrderRequest(BaseModel):
     )
     created_at: str = Field(
         default="",
-        description="ISO 8601 timestamp saat order dibuat (dari client browser)",
+        description="[DEPRECATED] ISO 8601 timestamp - omit this, backend uses datetime.now() for accurate WIB time",
     )
 
 
@@ -102,17 +102,10 @@ async def create_combo_order_endpoint(
 
     invoice_ref = request.order_id.strip() if request.order_id.strip() else f"ORD-{str(uuid4())[:8]}"
     
-    # Parse created_at from request (client timestamp), or fallback to server time
+    # Get current time in WIB (backend generates timestamp, don't trust client)
     from datetime import datetime
-    if request.created_at.strip():
-        try:
-            created_at_dt = datetime.fromisoformat(request.created_at.replace('Z', '+00:00'))
-            logger.info(f"📝 Parsed created_at from client: '{request.created_at}' → {created_at_dt} (tzinfo: {created_at_dt.tzinfo})")
-        except (ValueError, AttributeError) as e:
-            logger.warning(f"⚠️ Failed to parse created_at '{request.created_at}': {e}. Using server time.")
-            created_at_dt = datetime.utcnow()
-    else:
-        created_at_dt = datetime.utcnow()
+    created_at_dt = datetime.now()  # Current WIB time from server
+    logger.info(f"📝 Using server time (WIB): {created_at_dt}")
     
     logger.info(
         f"Creating combo order {invoice_ref} for {request.target_id} on {request.server_id} (created_at: {created_at_dt})"

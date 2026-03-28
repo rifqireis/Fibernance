@@ -117,7 +117,8 @@ async def export_data(
                     "deduction_breakdown": order.deduction_breakdown,
                     "sending_accounts": order.sending_accounts,
                     "proof_video_link": order.proof_video_link,
-                    "delivery_at": order.delivery_at.isoformat() if order.delivery_at else None,
+                    "delivery_at": order.delivery_at.isoformat() if order.delivery_at else None,  # Receipt/Struk time
+                    "actual_delivery_at": order.actual_delivery_at.isoformat() if order.actual_delivery_at else None,  # Order real time
                     "created_at": order.created_at.isoformat() if order.created_at else None,
                     "updated_at": order.updated_at.isoformat() if order.updated_at else None,
                 }
@@ -321,16 +322,21 @@ async def import_confirm(
             orders_to_import = import_data.get("orders", [])
             for order_data in orders_to_import:
                 try:
-                    # Parse datetime
-                    delivery_at = None
-                    if order_data.get("delivery_at"):
+                    # Helper to parse datetime strings
+                    def _parse_dt(dt_str):
+                        if not dt_str:
+                            return None
                         try:
-                            delivery_at = dt.fromisoformat(order_data["delivery_at"].replace("Z", "+00:00"))
-                        except:
-                            pass
-
-                    created_at = dt.fromisoformat(order_data.get("created_at", dt.utcnow().isoformat()).replace("Z", "+00:00")) if order_data.get("created_at") else dt.now(timezone.utc)
-                    updated_at = dt.fromisoformat(order_data.get("updated_at", dt.utcnow().isoformat()).replace("Z", "+00:00")) if order_data.get("updated_at") else dt.now(timezone.utc)
+                            # Handle both naive and timezone-aware formats
+                            clean_str = str(dt_str).rstrip('Z')
+                            return dt.fromisoformat(clean_str)
+                        except (ValueError, AttributeError, TypeError):
+                            return None
+                    
+                    delivery_at = _parse_dt(order_data.get("delivery_at"))
+                    actual_delivery_at = _parse_dt(order_data.get("actual_delivery_at"))
+                    created_at = _parse_dt(order_data.get("created_at")) or dt.utcnow()
+                    updated_at = _parse_dt(order_data.get("updated_at")) or dt.utcnow()
 
                     new_order = Order(
                         id=order_data.get("id"),
@@ -347,7 +353,8 @@ async def import_confirm(
                         deduction_breakdown=order_data.get("deduction_breakdown", {}),
                         sending_accounts=order_data.get("sending_accounts", {}),
                         proof_video_link=order_data.get("proof_video_link"),
-                        delivery_at=delivery_at,
+                        delivery_at=delivery_at,  # Receipt/Struk time
+                        actual_delivery_at=actual_delivery_at,  # Order real time
                         created_at=created_at,
                         updated_at=updated_at,
                     )

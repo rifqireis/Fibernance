@@ -51,12 +51,12 @@ class Account(SQLModel, table=True):
         description="Account status (active or inactive)",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Account creation timestamp",
+        default_factory=datetime.now,
+        description="Account creation timestamp (WIB local time, not UTC)",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Last update timestamp",
+        default_factory=datetime.now,
+        description="Last update timestamp (WIB local time, not UTC)",
     )
 
     class Config:
@@ -196,15 +196,19 @@ class Order(SQLModel, table=True):
     )
     delivery_at: Optional[datetime] = Field(
         default=None,
-        description="Expected delivery timestamp (calculated from 15:00 WIB cutoff)",
+        description="RECEIPT delivery time (markup) - jam 15:00 WIB based on 15:00 WIB cutoff rule",
+    )
+    actual_delivery_at: Optional[datetime] = Field(
+        default=None,
+        description="ACTUAL delivery time (order data) - real +7 days from order creation (WIB)",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Order creation timestamp",
+        default_factory=datetime.now,
+        description="Order creation timestamp (WIB local time, not UTC)",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Last update timestamp",
+        default_factory=datetime.now,
+        description="Last update timestamp (WIB local time, not UTC)",
     )
 
     class Config:
@@ -277,6 +281,7 @@ class OrderResponse(SQLModel):
     sending_accounts: dict
     proof_video_link: Optional[str]
     delivery_at: Optional[datetime]
+    actual_delivery_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 
@@ -331,12 +336,12 @@ class TopupHistory(SQLModel, table=True):
         description="JSON string of Digiflazz response",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Transaction creation timestamp",
+        default_factory=datetime.now,
+        description="Transaction creation timestamp (WIB local time, not UTC)",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Last update timestamp",
+        default_factory=datetime.now,
+        description="Last update timestamp (WIB local time, not UTC)",
     )
 
     class Config:
