@@ -8,8 +8,21 @@ FRONTEND_DIR="${SCRIPT_DIR}/frontend"
 # Fungsi untuk mematikan semua proses saat kita tekan Ctrl+C
 function cleanup {
     echo -e "\n\n🛑 Mematikan semua layanan..."
+    
+    # Kill parent processes
     kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
     wait $BACKEND_PID $FRONTEND_PID 2>/dev/null
+    
+    # Kill any remaining child processes
+    sleep 1
+    echo "🔪 Membunuh sisa proses..."
+    pkill -f "uvicorn" 2>/dev/null || true
+    pkill -f "vite" 2>/dev/null || true
+    pkill -f "npm run dev" 2>/dev/null || true
+    pkill -9 -f "uvicorn" 2>/dev/null || true
+    pkill -9 -f "vite" 2>/dev/null || true
+    
+    echo "✅ Semua proses sudah berhenti"
     exit 0
 }
 

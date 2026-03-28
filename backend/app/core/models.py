@@ -273,6 +273,11 @@ class OrderResponse(SQLModel):
     delivery_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat() + 'Z' if v and not v.isoformat().endswith('Z') else v.isoformat() if v else None
+        }
 
 
 class TopupHistory(SQLModel, table=True):

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useFinishOrder, useCancelOrder } from '../api/orders';
 import { getOrders, ComboOrderResponse } from '../api/orders';
@@ -18,6 +18,7 @@ const Orders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'item' | 'diamond'>('date-desc');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [, setUpdateTrigger] = useState(0); // Trigger re-render untuk countdown update
 
   const handleFinish = async (orderId: string) => {
     try {
@@ -45,18 +46,84 @@ const Orders: React.FC = () => {
     setShowReceipt(true);
   };
 
+  // Countdown timer - update every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setUpdateTrigger((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Calculate countdown time remaining until delivery
+  const calculateCountdown = (deliveryDateString: string | undefined): string => {
+    if (!deliveryDateString) return '—';
+    
+    const now = new Date();
+    const deliveryDate = new Date(deliveryDateString);
+    const diff = deliveryDate.getTime() - now.getTime();
+    
+    if (diff <= 0) return 'Delivered'; // Order sudah dikirim
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((diff / 1000 / 60) % 60);
+    
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  };
+
+  // Format datetime to WIB (UTC+7) timezone
+  const formatDateTimeInWIB = (utcDateString: string | undefined): string => {
+    if (!utcDateString) return 'N/A';
+    
+    // Parse the UTC ISO string
+    const utcDate = new Date(utcDateString);
+    
+    // Extract UTC components
+    let day = utcDate.getUTCDate();
+    let month = utcDate.getUTCMonth();
+    let year = utcDate.getUTCFullYear();
+    let hours = utcDate.getUTCHours();
+    const minutes = utcDate.getUTCMinutes();
+    
+    // Add 7 hours for WIB timezone
+    hours += 7;
+    
+    // Handle day overflow (if hours >= 24)
+    if (hours >= 24) {
+      hours -= 24;
+      day += 1;
+      
+      // Handle month/year overflow
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      if (day > daysInMonth) {
+        day = 1;
+        month += 1;
+        if (month > 11) {
+          month = 0;
+          year += 1;
+        }
+      }
+    }
+    
+    // Format with month names
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthStr = months[month];
+    const yearStr = year.toString().slice(-2);
+    const dayStr = day.toString().padStart(2, '0');
+    const hoursStr = hours.toString().padStart(2, '0');
+    const minutesStr = minutes.toString().padStart(2, '0');
+    
+    return `${dayStr} ${monthStr} ${yearStr}, ${hoursStr}:${minutesStr}`;
+  };
+
   const formatDeliveryDate = (dateString: string | undefined): string => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: '2-digit',
-    }) + ', ' + date.toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+    return formatDateTimeInWIB(dateString);
   };
 
   const getStatusBadge = (status: string) => {
@@ -359,47 +426,51 @@ const Orders: React.FC = () => {
                 )
                 .map((order) => (
                   <div key={order.id} className="border border-gray-200 rounded-none bg-white overflow-hidden">
-                    {/* Card Header - Always Visible (Summary Info) */}
+                    {/* Card Header - Always Visible (Summary Info - Minimalis) */}
                     <button
                       onClick={() =>
                         setExpandedOrderId(expandedOrderId === order.id ? null : order.id)
                       }
-                      className="w-full px-4 py-3 flex flex-col gap-2 hover:bg-gray-50 transition-colors text-left"
+                      className="w-full px-4 py-2 flex flex-col gap-1.5 hover:bg-gray-50 transition-colors text-left"
                     >
-                      {/* Row 1: Item Info + Status */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="font-semibold text-black text-sm">{order.quantity}x {order.item_name}</p>
+                      {/* Row 1: Item + Status + Countdown (Right) */}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-black text-sm truncate">{order.quantity}x {order.item_name}</p>
                         </div>
-                        <div className="flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           {getStatusBadge(order.status)}
+                          {/* Countdown Timer - Right side */}
+                          {order.status === 'PENDING' && (
+                            <div className="text-xs font-semibold text-white bg-black px-2 py-1 rounded-none whitespace-nowrap">
+                              {calculateCountdown(order.delivery_at)}
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Row 2: Buyer Name */}
-                      <div className="text-xs text-gray-700">
-                        <span className="font-semibold">Pembeli:</span> {order.buyer_name}
+                      {/* Row 2: Pembeli | Game ID & Zone */}
+                      <div className="flex justify-between gap-2 text-xs text-gray-700">
+                        <div className="flex-1 min-w-0 truncate">
+                          <span className="font-semibold">Pembeli:</span> {order.buyer_name}
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <span className="font-semibold">ID:</span> {order.target_id}
+                          {order.game_username && (
+                            <div className="text-xs">@{order.game_username}</div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Row 3: Game ID Lengkap */}
-                      <div className="text-xs text-gray-700">
-                        <span className="font-semibold">Game ID:</span> {order.target_id}
-                        {order.game_username && <>
-                          {' | '}
-                          <span>{order.game_username}</span>
-                        </>}
-                        {' | Zone: '}{order.server_id}
-                      </div>
-
-                      {/* Row 4: Processing Account */}
+                      {/* Row 3: Akun Pengiriman */}
                       {order.sending_accounts && Object.keys(order.sending_accounts).length > 0 && (
-                        <div className="text-xs text-gray-700">
-                          <span className="font-semibold">Akun Pengiriman:</span>{' '}
-                          {Object.entries(order.sending_accounts).map(([accountId, accountData]: [string, any], idx) => {
+                        <div className="text-xs text-gray-700 truncate">
+                          <span className="font-semibold">Akun:</span>{' '}
+                          {Object.entries(order.sending_accounts).map(([, accountData]: [string, any], idx) => {
                             const accountName = typeof accountData === 'object' && accountData.name ? accountData.name : accountData;
                             return (
-                              <span key={accountId}>
-                                {idx > 0 && ', '}
+                              <span key={accountName}>
+                                {idx > 0 && ' • '}
                                 {accountName}
                               </span>
                             );
@@ -407,9 +478,9 @@ const Orders: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Row 5: Delivery Time */}
-                      <div className="text-xs text-gray-700">
-                        <span className="font-semibold">Pengiriman:</span> {formatDeliveryDate(order.delivery_at)}
+                      {/* Row 4: Pengiriman Time (Compact) */}
+                      <div className="text-xs text-gray-600">
+                        📦 {formatDeliveryDate(order.delivery_at)}
                       </div>
                     </button>
 
@@ -563,29 +634,53 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) => {
   const mode = order.status === 'PENDING' ? 'invoice' : 'receipt';
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    if (!dateString) return 'N/A';
+    
+    // Parse UTC date and convert to WIB (UTC+7)
+    const utcDate = new Date(dateString);
+    
+    // Extract UTC components
+    let dayNum = utcDate.getUTCDate();
+    let monthNum = utcDate.getUTCMonth();
+    let year = utcDate.getUTCFullYear();
+    let dayOfWeek = utcDate.getUTCDay();
+    let hours = utcDate.getUTCHours();
+    const minutes = utcDate.getUTCMinutes();
+    const seconds = utcDate.getUTCSeconds();
+    
+    // Add 7 hours for WIB timezone
+    hours += 7;
+    
+    // Handle day overflow (if hours >= 24)
+    if (hours >= 24) {
+      hours -= 24;
+      dayOfWeek = (dayOfWeek + 1) % 7; // Next day of week
+      dayNum += 1;
+      
+      // Handle month/year overflow
+      const daysInMonth = new Date(year, monthNum + 1, 0).getDate();
+      if (dayNum > daysInMonth) {
+        dayNum = 1;
+        monthNum += 1;
+        if (monthNum > 11) {
+          monthNum = 0;
+          year += 1;
+        }
+      }
+    }
+    
+    const hoursStr = hours.toString().padStart(2, '0');
+    const minutesStr = minutes.toString().padStart(2, '0');
+    const secondsStr = seconds.toString().padStart(2, '0');
+    
     if (language === 'id') {
-      return date.toLocaleDateString('id-ID', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
+      const daysID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const monthsID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      return `${daysID[dayOfWeek]}, ${dayNum} ${monthsID[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr}`;
     } else {
-      return date.toLocaleDateString('en-GB', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
+      const daysEN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const monthsEN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${daysEN[dayOfWeek]}, ${dayNum} ${monthsEN[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr}`;
     }
   };
 

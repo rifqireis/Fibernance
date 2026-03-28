@@ -12,14 +12,14 @@ def calculate_delivery_at(created_at: datetime) -> datetime:
     Calculate expected delivery_at based on 15:00 WIB (08:00 UTC) cutoff.
     
     Logic:
-    - If order created < 15:00 WIB (08:00 UTC): delivery = +7 days at 15:00 WIB
-    - If order created >= 15:00 WIB (08:00 UTC): delivery = +8 days at 15:00 WIB
+    - If order created < 15:00 WIB (08:00 UTC): delivery = +7 days at SAME TIME as created
+    - If order created >= 15:00 WIB (08:00 UTC): delivery = +8 days at SAME TIME as created
     
     Args:
         created_at: Order creation timestamp (in UTC)
     
     Returns:
-        datetime: Expected delivery timestamp (in UTC)
+        datetime: Expected delivery timestamp (in UTC) with same hour/minute preserved
     """
     # Ensure created_at is timezone-aware (UTC)
     if created_at.tzinfo is None:
@@ -41,10 +41,14 @@ def calculate_delivery_at(created_at: datetime) -> datetime:
         # Order after cutoff: delivery in 8 days
         days_to_add = 8
     
-    # Calculate delivery date at 15:00 WIB (08:00 UTC)
+    # Calculate delivery date (7 or 8 days later, same hour:minute:second)
     delivery_utc = created_at + timedelta(days=days_to_add)
-    # Set time to 08:00 UTC (15:00 WIB)
-    delivery_utc = delivery_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+    # PRESERVE hour, minute, second from created_at (do not replace with 08:00)
+    # This ensures delivery time matches order creation time
+    
+    # Ensure delivery_utc is timezone-aware (UTC) for proper JSON serialization
+    if delivery_utc.tzinfo is None:
+        delivery_utc = delivery_utc.replace(tzinfo=timezone.utc)
     
     return delivery_utc
 
@@ -59,6 +63,7 @@ async def create_combo_order(
     buyer_name: str,
     item_name: str,
     quantity: int = 1,
+    created_at: datetime = None,
 ) -> Order:
     """
     Create a combo order with Equal Distribution algorithm.
@@ -93,6 +98,13 @@ async def create_combo_order(
         ValueError: If accounts not found or insufficient stock
     """
 
+    # Use provided created_at (from client) or fallback to server time
+    if created_at is None:
+        created_at = datetime.utcnow()
+    elif created_at.tzinfo is None:
+        # Make naive datetime timezone-aware (UTC)
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    
     # Validate input
     if total_diamond <= 0:
         raise ValueError("total_diamond must be greater than 0")
@@ -151,8 +163,8 @@ async def create_combo_order(
             "deduction": deduction_breakdown[account.name],
         }
 
-    # Calculate delivery_at based on 15:00 WIB cutoff
-    delivery_at = calculate_delivery_at(datetime.utcnow())
+    # Calculate delivery_at based on 15:00 WIB cutoff (using client-provided created_at timestamp)
+    delivery_at = calculate_delivery_at(created_at)
 
     # Create Order record with PENDING status (manual gift, no Digiflazz)
     order = Order(

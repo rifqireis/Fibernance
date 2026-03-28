@@ -247,6 +247,7 @@ const Cashier: React.FC = () => {
         buyer_name: buyerName,
         item_name: itemName,
         quantity: quantity,
+        created_at: new Date().toISOString(),
       });
 
       alert('✅ Order processed successfully!');

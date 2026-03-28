@@ -12,7 +12,7 @@ from app.core.background_tasks import (
     pending_transaction_checker_loop,
     check_pending_topups_loop,
 )
-from app.routers import accounts, orders, digiflazz
+from app.routers import accounts, orders, digiflazz, data_sync
 
 # Configure logging
 logging.basicConfig(
@@ -88,6 +88,7 @@ app.add_middleware(
 app.include_router(accounts.router, prefix="/api/accounts", tags=["Accounts"])
 app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
 app.include_router(digiflazz.router, prefix="/api/digiflazz", tags=["Digiflazz"])
+app.include_router(data_sync.router, prefix="/api/data", tags=["Data Sync"])
 
 
 # Health check endpoint

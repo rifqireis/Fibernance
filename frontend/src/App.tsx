@@ -4,6 +4,7 @@ import Inventory from './pages/Inventory'
 import Cashier from './pages/Cashier'
 import Orders from './pages/Orders'
 import Digiflazz from './pages/Digiflazz'
+import DataSync from './pages/DataSync'
 
 const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -113,6 +114,23 @@ const App: React.FC = () => {
                   Digiflazz
                 </NavLink>
               </li>
+
+              {/* DataSync Link */}
+              <li>
+                <NavLink
+                  onClick={closeMenu}
+                  to="/data-sync"
+                  className={({ isActive }) =>
+                    `block py-3 px-4 text-sm font-sans font-semibold transition-all duration-200 ${
+                      isActive
+                        ? 'bg-black !text-white'
+                        : 'text-gray-500 hover:text-black hover:bg-gray-100'
+                    }`
+                  }
+                >
+                  Data Sync
+                </NavLink>
+              </li>
             </ul>
           </nav>
 
@@ -156,6 +174,7 @@ const App: React.FC = () => {
             <Route path="/cashier" element={<Cashier />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/digiflazz" element={<Digiflazz />} />
+            <Route path="/data-sync" element={<DataSync />} />
           </Routes>
         </main>
       </div>

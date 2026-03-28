@@ -63,6 +63,10 @@ class ComboOrderRequest(BaseModel):
         ge=1,
         description="Jumlah pesanan",
     )
+    created_at: str = Field(
+        default="",
+        description="ISO 8601 timestamp saat order dibuat (dari client browser)",
+    )
 
 
 @router.post("/combo", response_model=OrderResponse)
@@ -96,8 +100,21 @@ async def create_combo_order_endpoint(
     """
 
     invoice_ref = request.order_id.strip() if request.order_id.strip() else f"ORD-{str(uuid4())[:8]}"
+    
+    # Parse created_at from request (client timestamp), or fallback to server time
+    from datetime import datetime
+    if request.created_at.strip():
+        try:
+            created_at_dt = datetime.fromisoformat(request.created_at.replace('Z', '+00:00'))
+            logger.info(f"📝 Parsed created_at from client: '{request.created_at}' → {created_at_dt} (tzinfo: {created_at_dt.tzinfo})")
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"⚠️ Failed to parse created_at '{request.created_at}': {e}. Using server time.")
+            created_at_dt = datetime.utcnow()
+    else:
+        created_at_dt = datetime.utcnow()
+    
     logger.info(
-        f"Creating combo order {invoice_ref} for {request.target_id} on {request.server_id}"
+        f"Creating combo order {invoice_ref} for {request.target_id} on {request.server_id} (created_at: {created_at_dt})"
     )
 
     try:
@@ -112,6 +129,7 @@ async def create_combo_order_endpoint(
             buyer_name=request.buyer_name,
             item_name=request.item_name,
             quantity=request.quantity,
+            created_at=created_at_dt,
         )
 
         logger.info(
