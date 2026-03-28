@@ -26,6 +26,7 @@ export interface ComboOrderResponse {
   deduction_breakdown: Record<string, number>;
   sending_accounts: Record<string, any>;
   delivery_at: string; // ISO 8601 datetime
+  proof_video_link?: string; // Telegram URL for proof video delivery
   created_at: string;
   updated_at: string;
 }
@@ -46,12 +47,21 @@ export const createComboOrder = async (
 };
 
 /**
- * Finish an order (mark as SUCCESS).
- * Stock was already reserved at creation time.
+ * Finish an order with proof video (mark as DONE).
+ * Requires a video file to be uploaded.
  */
-export const finishOrder = async (orderId: string): Promise<ComboOrderResponse> => {
+export const finishOrder = async (orderId: string, videoFile: File): Promise<ComboOrderResponse> => {
+  const formData = new FormData();
+  formData.append('file', videoFile);
+  
   const response = await apiClient.post<ComboOrderResponse>(
-    `/api/orders/${orderId}/finish`
+    `/api/orders/${orderId}/finish`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
   );
   return response.data;
 };

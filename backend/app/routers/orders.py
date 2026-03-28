@@ -3,13 +3,14 @@
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.database import get_session
 from app.core.models import Account, Order, OrderResponse
 from app.services.order_service import create_combo_order
+from app.services.telegram_service import upload_video_to_telegram
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -148,23 +149,27 @@ async def create_combo_order_endpoint(
 @router.post("/{order_id}/finish", response_model=OrderResponse)
 async def finish_order(
     order_id: str,
+    file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
 ) -> OrderResponse:
     """
-    Mark an order as finished (status = SUCCESS).
+    Mark an order as finished (status = DONE) with proof video.
     
+    Uploads proof video to Telegram and stores the link.
     Stock was already reserved at order creation, so no further changes needed.
 
     Args:
         order_id: Order ID (UUID)
+        file: Proof video file (UploadFile)
         session: Database session
 
     Returns:
-        OrderResponse: Updated order data
+        OrderResponse: Updated order data with proof_video_link
 
     Raises:
-        HTTPException: If order not found or already completed
+        HTTPException: If order not found, already completed, or video upload fails
     """
+    # Fetch order
     stmt = select(Order).where(Order.id == order_id)
     result = await session.execute(stmt)
     order = result.scalars().first()
@@ -172,20 +177,58 @@ async def finish_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.status in ["SUCCESS", "CANCELLED"]:
+    if order.status in ["DONE", "CANCELLED"]:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot finish order in {order.status} status",
         )
 
-    # Update status to SUCCESS
-    order.status = "SUCCESS"
-    session.add(order)
-    await session.commit()
-    await session.refresh(order)
+    # Read file bytes from memory
+    try:
+        file_bytes = await file.read()
+    except Exception as e:
+        logger.error(f"❌ Error reading file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
-    logger.info(f"✅ Order {order.invoice_ref} marked as SUCCESS")
-    return order
+    # Validate file size (50MB max)
+    MAX_FILE_SIZE = 50 * 1024 * 1024
+    if len(file_bytes) > MAX_FILE_SIZE:
+        file_size_mb = len(file_bytes) / (1024 * 1024)
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large: {file_size_mb:.2f}MB (max 50MB)",
+        )
+
+    # Upload to Telegram
+    try:
+        caption = f"Bukti Order {order.invoice_ref}"
+        proof_video_link = upload_video_to_telegram(
+            file_bytes=file_bytes,
+            filename=file.filename or "proof_video.mp4",
+            caption=caption,
+        )
+    except ValueError as e:
+        logger.error(f"❌ Telegram upload failed for order {order_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Video upload failed: {str(e)}")
+    except Exception as e:
+        logger.error(f"❌ Unexpected error uploading video for order {order_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to upload proof video")
+
+    # Update order with proof link and mark as DONE
+    try:
+        order.proof_video_link = proof_video_link
+        order.status = "DONE"
+        session.add(order)
+        await session.commit()
+        await session.refresh(order)
+
+        logger.info(f"✅ Order {order.invoice_ref} marked as DONE with proof: {proof_video_link}")
+        return order
+
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"❌ Error updating order {order_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update order")
 
 
 @router.post("/{order_id}/cancel", response_model=OrderResponse)
@@ -215,7 +258,7 @@ async def cancel_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.status in ["SUCCESS", "CANCELLED"]:
+    if order.status in ["DONE", "CANCELLED"]:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot cancel order in {order.status} status",
@@ -240,6 +283,7 @@ async def cancel_order(
         raise HTTPException(status_code=500, detail="Failed to cancel order")
 
 
+@router.get("")
 @router.get("/")
 async def list_orders(
     session: AsyncSession = Depends(get_session),

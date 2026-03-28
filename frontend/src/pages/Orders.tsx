@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useFinishOrder, useCancelOrder } from '../api/orders';
-import { getOrders, ComboOrderResponse } from '../api/orders';
+import { getOrders, ComboOrderResponse, finishOrder } from '../api/orders';
 
 const Orders: React.FC = () => {
   const { data: orders, isLoading, error, refetch } = useQuery({
@@ -13,6 +13,8 @@ const Orders: React.FC = () => {
   const cancelMutation = useCancelOrder();
   const [selectedOrder, setSelectedOrder] = useState<ComboOrderResponse | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [showVideoUpload, setShowVideoUpload] = useState(false);
+  const [videoUploadOrder, setVideoUploadOrder] = useState<ComboOrderResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,13 +22,9 @@ const Orders: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [, setUpdateTrigger] = useState(0); // Trigger re-render untuk countdown update
 
-  const handleFinish = async (orderId: string) => {
-    try {
-      await finishMutation.mutateAsync(orderId);
-      refetch();
-    } catch (err) {
-      console.error('Error finishing order:', err);
-    }
+  const handleFinish = async (order: ComboOrderResponse) => {
+    setVideoUploadOrder(order);
+    setShowVideoUpload(true);
   };
 
   const handleCancel = async (orderId: string) => {
@@ -127,8 +125,8 @@ const Orders: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === 'SUCCESS') {
-      return <span className="px-3 py-1 text-xs font-semibold text-white bg-black rounded-none">SUCCESS</span>;
+    if (status === 'DONE') {
+      return <span className="px-3 py-1 text-xs font-semibold text-white bg-black rounded-none">DONE</span>;
     } else if (status === 'CANCELLED') {
       return <span className="px-3 py-1 text-xs font-semibold text-white bg-red-600 rounded-none">CANCELLED</span>;
     } else {
@@ -382,11 +380,11 @@ const Orders: React.FC = () => {
                             {/* Finish Button - Only show for PENDING */}
                             {order.status === 'PENDING' && (
                               <button
-                                onClick={() => handleFinish(order.id)}
-                                disabled={finishMutation.isPending}
+                                onClick={() => handleFinish(order)}
+                                disabled={false}
                                 className="px-3 py-1.5 text-xs font-semibold text-white bg-black hover:bg-charcoal disabled:opacity-50 transition-colors rounded-none"
                               >
-                                {finishMutation.isPending ? 'Finishing...' : 'Finish'}
+                                Finish
                               </button>
                             )}
 
@@ -571,11 +569,11 @@ const Orders: React.FC = () => {
                             {order.status === 'PENDING' && (
                               <>
                                 <button
-                                  onClick={() => handleFinish(order.id)}
-                                  disabled={finishMutation.isPending}
+                                  onClick={() => handleFinish(order)}
+                                  disabled={false}
                                   className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-black hover:bg-charcoal disabled:opacity-50 transition-colors rounded-none"
                                 >
-                                  {finishMutation.isPending ? 'Finishing...' : 'Finish Order'}
+                                  Finish Order
                                 </button>
                                 <button
                                   onClick={() => handleCancel(order.id)}
@@ -613,6 +611,18 @@ const Orders: React.FC = () => {
           }}
         />
       )}
+
+      {/* Video Upload Modal */}
+      {showVideoUpload && videoUploadOrder && (
+        <VideoUploadModal
+          order={videoUploadOrder}
+          onClose={() => {
+            setShowVideoUpload(false);
+            setVideoUploadOrder(null);
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -630,7 +640,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) => {
   const [language, setLanguage] = React.useState<'id' | 'en'>('id');
   const receiptRef = React.useRef<HTMLDivElement>(null);
 
-  // Determine mode: INVOICE for PENDING, RECEIPT for SUCCESS
+  // Determine mode: INVOICE for PENDING, RECEIPT for DONE/CANCELLED
   const mode = order.status === 'PENDING' ? 'invoice' : 'receipt';
 
   const formatDate = (dateString: string) => {
@@ -844,6 +854,167 @@ ${divider}`;
             className="flex-1 px-4 py-2 border border-gray-300 text-black font-semibold text-sm hover:bg-gray-50 transition-colors rounded-none"
           >
             {language === 'id' ? 'Tutup' : 'Close'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Video Upload Modal Component
+ * Allows user to upload proof video for order delivery
+ */
+interface VideoUploadModalProps {
+  order: ComboOrderResponse;
+  onClose: () => void;
+}
+
+const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ order, onClose }) => {
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type and size
+      if (!file.type.startsWith('video/')) {
+        setError('Please select a valid video file');
+        return;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        setError('Video file must be less than 50MB');
+        return;
+      }
+      setSelectedFile(file);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a video file first');
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+    
+    try {
+      const response = await finishOrder(order.id, selectedFile);
+      setSuccess(true);
+      
+      // Show success message for 2 seconds then close
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to upload video. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-none shadow-lg max-w-md w-full max-h-screen overflow-y-auto">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-black">Upload Bukti Video Pengiriman</h2>
+          <button
+            onClick={onClose}
+            disabled={isUploading}
+            className="text-gray-600 hover:text-black transition-colors text-xl disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 space-y-4">
+          {/* Order Info */}
+          <div className="bg-gray-50 p-4 rounded-none border border-gray-200">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Pesanan</p>
+            <p className="text-sm font-semibold text-black">{order.invoice_ref}</p>
+            <p className="text-sm text-gray-700">{order.quantity}x {order.item_name}</p>
+          </div>
+
+          {/* Success Message */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 px-4 py-3 rounded-none">
+              <p className="text-sm font-semibold text-green-800">✓ Video berhasil diunggah!</p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 px-4 py-3 rounded-none">
+              <p className="text-sm font-semibold text-red-800">{error}</p>
+            </div>
+          )}
+
+          {/* File Selection */}
+          {!success && (
+            <>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Pilih Video File (Maks 50MB)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*"
+                    onChange={handleFileSelect}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="flex-1 px-4 py-3 border-2 border-dashed border-gray-300 hover:border-black bg-gray-50 hover:bg-gray-100 text-sm font-semibold text-black transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {selectedFile ? '✓ ' + selectedFile.name : 'Pilih File'}
+                  </button>
+                </div>
+              </div>
+
+              {/* File Info */}
+              {selectedFile && (
+                <div className="bg-blue-50 border border-blue-200 px-4 py-3 rounded-none space-y-1">
+                  <p className="text-xs font-semibold text-blue-700 uppercase">File Selected</p>
+                  <p className="text-sm text-blue-900">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                </div>
+              )}
+
+              {/* Info Text */}
+              <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 px-4 py-3 rounded-none space-y-1">
+                <p>• Format: Video (MP4, MOV, AVI, dsb)</p>
+                <p>• Ukuran maksimal: 50 MB</p>
+                <p>• Video akan diunggah ke server Telegram</p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={isUploading}
+            className="flex-1 px-4 py-2 border border-gray-300 text-black font-semibold text-sm hover:bg-gray-50 transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleUpload}
+            disabled={!selectedFile || isUploading || success}
+            className="flex-1 px-4 py-2 bg-black text-white font-semibold text-sm hover:bg-charcoal transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isUploading ? 'Uploading...' : 'Upload Video'}
           </button>
         </div>
       </div>

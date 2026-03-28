@@ -3,9 +3,13 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables from .env file
+load_dotenv()
 
 from app.core.database import init_db, close_db, engine
 from app.core.background_tasks import (

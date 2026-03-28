@@ -116,9 +116,10 @@ async def export_data(
                     "status": order.status,
                     "deduction_breakdown": order.deduction_breakdown,
                     "sending_accounts": order.sending_accounts,
-                    "delivery_at": order.delivery_at.isoformat() + "Z" if order.delivery_at else None,
-                    "created_at": order.created_at.isoformat() + "Z" if order.created_at else None,
-                    "updated_at": order.updated_at.isoformat() + "Z" if order.updated_at else None,
+                    "proof_video_link": order.proof_video_link,
+                    "delivery_at": order.delivery_at.isoformat() if order.delivery_at else None,
+                    "created_at": order.created_at.isoformat() if order.created_at else None,
+                    "updated_at": order.updated_at.isoformat() if order.updated_at else None,
                 }
                 for order in orders
             ]
@@ -306,9 +307,15 @@ async def import_confirm(
 
         # Import Orders
         if import_type in ["orders", "both"]:
+            # Count current orders before deletion
+            stmt = select(Order)
+            result = await session.execute(stmt)
+            current_orders_count = len(result.scalars().all())
+            
             # Delete all existing orders
             stmt = delete(Order)
             await session.execute(stmt)
+            results["orders_deleted"] = current_orders_count
 
             # Add new orders
             orders_to_import = import_data.get("orders", [])
@@ -339,6 +346,7 @@ async def import_confirm(
                         status=order_data.get("status", "PENDING"),
                         deduction_breakdown=order_data.get("deduction_breakdown", {}),
                         sending_accounts=order_data.get("sending_accounts", {}),
+                        proof_video_link=order_data.get("proof_video_link"),
                         delivery_at=delivery_at,
                         created_at=created_at,
                         updated_at=updated_at,

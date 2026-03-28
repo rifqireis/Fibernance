@@ -177,7 +177,7 @@ class Order(SQLModel, table=True):
         default="PENDING",
         min_length=1,
         max_length=50,
-        description="Order status (PENDING, SUCCESS, CANCELLED, etc.)",
+        description="Order status (PENDING, DONE, CANCELLED, etc.)",
     )
     deduction_breakdown: dict = Field(
         default_factory=dict,
@@ -188,6 +188,11 @@ class Order(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column(JSON),
         description="JSON list of sending accounts with their names and deductions",
+    )
+    proof_video_link: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Telegram URL link for proof video delivery",
     )
     delivery_at: Optional[datetime] = Field(
         default=None,
@@ -270,14 +275,10 @@ class OrderResponse(SQLModel):
     status: str
     deduction_breakdown: dict
     sending_accounts: dict
+    proof_video_link: Optional[str]
     delivery_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() + 'Z' if v and not v.isoformat().endswith('Z') else v.isoformat() if v else None
-        }
 
 
 class TopupHistory(SQLModel, table=True):
