@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccounts } from '../api/accounts';
+import { Badge, Button, Card, Input, Select, cn } from '../components/ui';
 
 const SKU_PRODUCTS = [
   { sku: 'WDP_BR', label: 'Weekly Diamond Pass - Brazil' },
@@ -27,6 +28,11 @@ interface FormProps {
   accounts: any[] | undefined;
   isLoading: boolean;
 }
+
+const digiflazzTabButtonClass =
+  'h-auto border-b-2 border-x-0 border-t-0 px-6 py-4 text-sm font-semibold uppercase tracking-wide focus:ring-0 focus:ring-offset-0';
+
+const compactButtonClass = 'h-auto px-4 py-2 text-xs uppercase tracking-wide';
 
 const formatRupiah = (value: number | null | undefined): string => {
   if (value === null || value === undefined) return 'N/A';
@@ -129,40 +135,42 @@ const WDPPriceCard: React.FC<{
     if (isEditing) {
       return (
         <div className="flex flex-wrap justify-end gap-2">
-          <input
+          <Input
             type="number"
             value={tempValue}
             onChange={(event) => onTempChange(event.target.value)}
             className="w-28 text-sm"
           />
-          <button
+          <Button
             type="button"
             onClick={onSave}
             disabled={isSaving}
-            className="btn-primary px-3 py-2 text-xs uppercase tracking-wide"
+            className="h-auto px-3 py-2 text-xs uppercase tracking-wide"
           >
             {isSaving ? 'Saving' : 'Save'}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onCancel}
-            className="btn-secondary px-3 py-2 text-xs uppercase tracking-wide"
+            variant="secondary"
+            className="h-auto px-3 py-2 text-xs uppercase tracking-wide"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       );
     }
 
     return (
-      <button
+      <Button
         type="button"
         onClick={onEdit}
-        className="border-b border-gray-400 pb-1 text-lg font-serif font-semibold text-black transition-colors hover:border-black"
+        variant="ghost"
+        className="h-auto border-0 border-b border-gray-400 px-0 pb-1 pt-0 text-lg font-serif font-semibold text-black hover:border-b hover:border-black hover:bg-transparent"
         title="Edit cost price"
       >
         {formatRupiah(value)}
-      </button>
+      </Button>
     );
   };
 
@@ -177,29 +185,30 @@ const WDPPriceCard: React.FC<{
           </p>
         </div>
         {onRefresh && (
-          <button
+          <Button
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
-            className="btn-secondary px-4 py-2 text-xs uppercase tracking-wide"
+            variant="secondary"
+            className={compactButtonClass}
           >
             Refresh Prices
-          </button>
+          </Button>
         )}
       </div>
 
       {isLoading ? (
-        <div className="panel mt-6 p-6">
+        <Card className="mt-6 border-gray-200 p-6">
           <p className="text-sm text-gray-600">Loading market prices. Auto refresh runs every 10 minutes.</p>
-        </div>
+        </Card>
       ) : prices && prices.error ? (
-        <div className="mt-6 border border-red-200 bg-red-50 p-6 rounded-none">
-          <p className="status-badge status-badge-danger">Market Unavailable</p>
+        <Card className="mt-6 border-red-200 bg-red-50 p-6">
+          <Badge variant="error">Market Unavailable</Badge>
           <p className="mt-4 text-sm font-semibold text-black">Failed to load market prices.</p>
           <p className="mt-1 text-sm text-gray-700">{prices.error}</p>
-        </div>
+        </Card>
       ) : prices ? (
-        <div className="panel mt-6">
+        <Card className="mt-6 border-gray-200 p-0">
           <div className="border-b border-gray-200 px-6 py-5">
             <div className="flex items-start justify-between gap-6">
               <div>
@@ -267,12 +276,12 @@ const WDPPriceCard: React.FC<{
               {prices.cached ? `Cached ${prices.cache_age}s ago` : 'Live response'}
             </p>
           </div>
-        </div>
+        </Card>
       ) : (
-        <div className="mt-6 border border-red-200 bg-red-50 p-6 rounded-none">
-          <p className="status-badge status-badge-danger">Market Unavailable</p>
+        <Card className="mt-6 border-red-200 bg-red-50 p-6">
+          <Badge variant="error">Market Unavailable</Badge>
           <p className="mt-4 text-sm text-gray-700">Refresh to retry the pricing request.</p>
-        </div>
+        </Card>
       )}
     </section>
   );
@@ -315,10 +324,10 @@ const TopupRegularForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
         <form onSubmit={handleSubmit} className="mt-8 space-y-8">
           <div>
             <label className="section-label block">Warehouse Account</label>
-            <select
+            <Select
               value={selectedAccountId}
               onChange={(event) => setSelectedAccountId(event.target.value)}
-              className="mt-2 text-sm"
+              className="mt-2"
             >
               <option value="">Select an account</option>
               {accounts?.map((account) => (
@@ -326,15 +335,15 @@ const TopupRegularForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
                   {account.name} ({account.game_id}) - Stock: {account.real_diamond}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
             <label className="section-label block">SKU Product</label>
-            <select
+            <Select
               value={selectedSku}
               onChange={(event) => setSelectedSku(event.target.value)}
-              className="mt-2 text-sm"
+              className="mt-2"
             >
               <option value="">Select a product</option>
               {SKU_PRODUCTS.map((product) => (
@@ -342,18 +351,18 @@ const TopupRegularForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
                   {product.sku} - {product.label}
                 </option>
               ))}
-            </select>
+            </Select>
             <p className="mt-2 text-xs text-gray-500">Example: WDP_BR, WDP_TR, or ML_86.</p>
           </div>
 
           <div className="border-t border-gray-200 pt-8">
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting || !selectedAccountId || !selectedSku}
-              className="btn-primary w-full py-3 text-xs uppercase tracking-wide"
+              className="h-auto w-full py-3 text-xs uppercase tracking-wide"
             >
               {isSubmitting ? 'Processing' : 'Submit Regular Top-up'}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -400,10 +409,10 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
         <form onSubmit={handleSubmit} className="mt-8 space-y-8">
           <div>
             <label className="section-label block">Account With Debt</label>
-            <select
+            <Select
               value={selectedAccountId}
               onChange={(event) => setSelectedAccountId(event.target.value)}
-              className="mt-2 text-sm"
+              className="mt-2"
             >
               <option value="">Select an account</option>
               {accountsWithDebt.map((account) => (
@@ -411,7 +420,7 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
                   {account.name} ({account.game_id}) - Debt: {Math.ceil(account.pending_wdp / 100)} days
                 </option>
               ))}
-            </select>
+            </Select>
             {accountsWithDebt.length === 0 && (
               <p className="mt-2 text-xs text-gray-500">No accounts with debt are available.</p>
             )}
@@ -419,10 +428,10 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
 
           <div>
             <label className="section-label block">SKU Product</label>
-            <select
+            <Select
               value={selectedSku}
               onChange={(event) => setSelectedSku(event.target.value)}
-              className="mt-2 text-sm"
+              className="mt-2"
             >
               <option value="">Select a product</option>
               {SKU_PRODUCTS.map((product) => (
@@ -430,23 +439,23 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
                   {product.sku} - {product.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <div className="border border-gray-200 bg-gray-50 p-4 rounded-none">
+          <Card className="border-gray-200 bg-gray-50 p-4">
             <p className="text-xs text-gray-700">
               Incoming diamonds are applied to pending WDP debt first. Any remainder is moved into stock.
             </p>
-          </div>
+          </Card>
 
           <div className="border-t border-gray-200 pt-8">
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting || !selectedAccountId || !selectedSku || accountsWithDebt.length === 0}
-              className="btn-primary w-full py-3 text-xs uppercase tracking-wide"
+              className="h-auto w-full py-3 text-xs uppercase tracking-wide"
             >
               {isSubmitting ? 'Processing' : 'Submit Debt Settlement'}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -630,22 +639,23 @@ const Digiflazz: React.FC = () => {
                   </p>
                 </>
               ) : (
-                <div className="mt-4 border border-red-200 bg-red-50 p-4 rounded-none">
-                  <p className="status-badge status-badge-danger">Unavailable</p>
+                <Card className="mt-4 border-red-200 bg-red-50 p-4">
+                  <Badge variant="error">Unavailable</Badge>
                   <p className="mt-3 text-sm text-gray-700">The balance feed could not be loaded from Digiflazz.</p>
-                </div>
+                </Card>
               )}
             </div>
 
-            <button
+            <Button
               type="button"
               onClick={handleRefreshBalance}
               disabled={balanceLoading}
-              className="btn-secondary px-4 py-2 text-xs uppercase tracking-wide"
+              variant="secondary"
+              className={compactButtonClass}
               title="Manual refresh. Balance also refreshes automatically."
             >
               Refresh Balance
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -663,39 +673,43 @@ const Digiflazz: React.FC = () => {
 
       <div className="border-b border-gray-200 px-4 lg:px-8">
         <div className="flex items-center gap-0">
-          <button
+          <Button
             type="button"
             onClick={() => setActiveTab('regular')}
-            className={`px-6 py-4 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${
+            variant="ghost"
+            className={cn(
+              digiflazzTabButtonClass,
               activeTab === 'regular'
-                ? 'border-black text-black'
-                : 'border-transparent text-gray-600 hover:text-black'
-            }`}
+                ? 'border-black text-black hover:border-black hover:bg-transparent'
+                : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
+            )}
           >
             Regular Top-up
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => setActiveTab('settlement')}
-            className={`px-6 py-4 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${
+            variant="ghost"
+            className={cn(
+              digiflazzTabButtonClass,
               activeTab === 'settlement'
-                ? 'border-black text-black'
-                : 'border-transparent text-gray-600 hover:text-black'
-            }`}
+                ? 'border-black text-black hover:border-black hover:bg-transparent'
+                : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
+            )}
           >
             Debt Settlement
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="px-4 py-8 lg:px-8">
-        <div className="panel p-6 lg:p-8">
+        <Card className="border-gray-200 p-6 lg:p-8">
           {activeTab === 'regular' ? (
             <TopupRegularForm accounts={accounts} isLoading={isLoading} />
           ) : (
             <DebtSettlementForm accounts={accounts} isLoading={isLoading} />
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

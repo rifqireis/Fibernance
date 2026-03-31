@@ -7,6 +7,14 @@ import {
 } from '../api/accounts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { Badge, Button, Card, Input, Modal, cn } from '../components/ui';
+
+const inventoryUnderlineInputClass =
+  'h-auto border-0 border-b border-gray-300 bg-transparent px-0 py-2 focus:border-black focus:ring-0';
+
+const inventoryPrimaryButtonClass = 'h-auto px-6 py-2 text-sm';
+const inventoryStepButtonClass = 'h-auto px-3 py-1 text-xs';
+const inventoryModalActionClass = 'h-auto flex-1 px-6 py-2 text-sm';
 
 const Inventory: React.FC = () => {
   const { data: accounts, isLoading, error } = useAccounts();
@@ -74,12 +82,12 @@ const Inventory: React.FC = () => {
           <h1 className="text-4xl font-serif font-semibold text-black">Inventory</h1>
           <p className="mt-2 text-sm text-gray-600 font-sans">Account overview and diamond stock management</p>
         </div>
-        <button
+        <Button
           onClick={() => setIsModalOpen(true)}
-          className="bg-black text-white font-sans font-semibold py-2 px-6 rounded-none transition-all hover:opacity-90 active:scale-95"
+          className={inventoryPrimaryButtonClass}
         >
           + Add Account
-        </button>
+        </Button>
       </div>
 
       {/* Accounts List */}
@@ -87,7 +95,7 @@ const Inventory: React.FC = () => {
         {accounts && accounts.length > 0 ? (
           <div className="animate-fade-slide-up space-y-4 md:space-y-0">
             {/* Desktop: Table Layout */}
-            <div className="hidden md:block overflow-x-auto pb-4 border border-gray-200 rounded-none">
+            <Card className="hidden overflow-x-auto border-gray-200 pb-4 p-0 md:block">
               <div className="min-w-[900px]">
                 {/* Table Header */}
                 <div className="grid grid-cols-5 gap-6 px-6 py-4 bg-gray-50 border-b border-gray-300">
@@ -113,7 +121,7 @@ const Inventory: React.FC = () => {
                   />
                 ))}
               </div>
-            </div>
+            </Card>
 
             {/* Mobile: Card Layout */}
             <div className="md:hidden space-y-3">
@@ -184,44 +192,20 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
   const getClassificationBadge = (classification: string) => {
     switch (classification) {
       case 'Available':
-        return (
-          <div className="inline-block px-3 py-1 bg-green-50 border border-green-200 rounded-none">
-            <p className="text-xs font-sans font-semibold text-green-800 uppercase tracking-wide">
-              {classification}
-            </p>
-          </div>
-        );
+        return <Badge variant="success">{classification}</Badge>;
       case 'Forecast':
-        return (
-          <div className="inline-block px-3 py-1 bg-gray-100 border border-gray-300 rounded-none">
-            <p className="text-xs font-sans font-semibold text-gray-700 uppercase tracking-wide">
-              {classification}
-            </p>
-          </div>
-        );
+        return <Badge variant="neutral">{classification}</Badge>;
       case 'Preorder':
-        return (
-          <div className="inline-block px-3 py-1 bg-red-50 border border-red-200 rounded-none">
-            <p className="text-xs font-sans font-semibold text-red-800 uppercase tracking-wide">
-              {classification}
-            </p>
-          </div>
-        );
+        return <Badge variant="error">{classification}</Badge>;
       default:
-        return (
-          <div className="inline-block px-3 py-1 bg-gray-100 border border-gray-300 rounded-none">
-            <p className="text-xs font-sans font-semibold text-gray-700 uppercase tracking-wide">
-              Unknown
-            </p>
-          </div>
-        );
+        return <Badge variant="neutral">Unknown</Badge>;
     }
   };
 
   // Mobile: Compact Expandable Card Layout
   if (isMobile) {
     return (
-      <div className="border border-gray-200 rounded-none bg-white overflow-hidden">
+      <Card className="overflow-hidden border-gray-200 p-0">
         {/* Card Header - Always Visible (Clickable to Expand) */}
         <button
           onClick={onToggleExpand}
@@ -275,16 +259,17 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
 
             {/* Edit Button */}
             <div className="pt-2 border-t border-gray-300">
-              <button
+              <Button
                 onClick={() => onEdit(account)}
-                className="w-full text-xs px-3 py-2 border border-gray-300 bg-white text-black rounded-none font-medium hover:border-black hover:bg-gray-100 active:scale-95 transition-colors"
+                variant="secondary"
+                className="h-auto w-full px-3 py-2 text-xs"
               >
                 Edit
-              </button>
+              </Button>
             </div>
           </div>
         )}
-      </div>
+      </Card>
     );
   }
 
@@ -345,12 +330,13 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
             {account.is_active ? 'Active' : 'Inactive'}
           </p>
         </div>
-        <button
+        <Button
           onClick={() => onEdit(account)}
-          className="text-xs px-3 py-1 border border-gray-300 bg-white text-black rounded-none font-medium hover:border-black hover:bg-gray-100 active:scale-95 transition-colors"
+          variant="secondary"
+          className="h-auto px-3 py-1 text-xs"
         >
           Edit
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -394,24 +380,34 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-[90%] md:w-full max-w-md rounded-none border border-gray-200 p-4 md:p-8 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-serif font-semibold text-black mb-6">
+    <Modal
+      open
+      onClose={onClose}
+      className="max-h-[90vh] max-w-md overflow-y-auto border-gray-200"
+      contentClassName="p-4 md:p-8"
+      showCloseButton={false}
+    >
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <h2 className="text-2xl font-serif font-semibold text-black">
           Add New Account
         </h2>
+        <Button onClick={onClose} variant="secondary" className="h-auto px-3 py-2 text-xs uppercase tracking-wide">
+          Close
+        </Button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
           {/* Account Nickname */}
           <div>
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Nickname
             </label>
-            <input
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Account_001"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -421,12 +417,12 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Game ID
             </label>
-            <input
+            <Input
               type="text"
               value={gameId}
               onChange={(e) => setGameId(e.target.value)}
               placeholder="e.g., 123456789"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -436,12 +432,12 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Zone
             </label>
-            <input
+            <Input
               type="text"
               value={zone}
               onChange={(e) => setZone(e.target.value)}
               placeholder="e.g., Asia"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -451,12 +447,12 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Server ID
             </label>
-            <input
+            <Input
               type="text"
               value={serverId}
               onChange={(e) => setServerId(e.target.value)}
               placeholder="e.g., server_asia_1"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -466,13 +462,13 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Stock Diamond
             </label>
-            <input
+            <Input
               type="number"
               value={stockDiamond}
               onChange={(e) => setStockDiamond(Math.max(0, parseInt(e.target.value) || 0))}
               placeholder="0"
               min="0"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -482,65 +478,66 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               WDP Days
             </label>
-            <input
+            <Input
               type="number"
               value={wdpDays}
               onChange={(e) => setWdpDays(Math.max(0, parseInt(e.target.value) || 0))}
               placeholder="0"
               min="0"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
             <p className="text-xs text-gray-500 font-sans mt-2">
               1 day equals 20 diamonds. 1 WDP equals 80 instant diamonds plus 7 WDP days.
             </p>
             <div className="flex gap-2 mt-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setStockDiamond((prev) => prev + 80);
                   setWdpDays((prev) => prev + 7);
                 }}
-                className="px-3 py-1 bg-black text-white text-xs font-semibold rounded-none hover:bg-gray-800 disabled:opacity-50"
+                className={inventoryStepButtonClass}
                 disabled={isLoading}
               >
                 + 1 WDP
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => {
                   setStockDiamond((prev) => Math.max(0, prev - 80));
                   setWdpDays((prev) => Math.max(0, prev - 7));
                 }}
-                className="px-3 py-1 border border-black text-black text-xs font-semibold rounded-none hover:bg-gray-100 disabled:opacity-50"
+                variant="secondary"
+                className={inventoryStepButtonClass}
                 disabled={isLoading}
               >
                 - 1 WDP
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="flex-1 px-6 py-2 border border-gray-300 bg-white text-black rounded-none font-medium hover:border-black hover:bg-gray-50 active:scale-95 disabled:opacity-50"
+              variant="secondary"
+              className={inventoryModalActionClass}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isLoading}
-              className="flex-1 px-6 py-2 bg-black text-white rounded-none font-medium hover:opacity-90 active:scale-95 disabled:opacity-50"
+              className={inventoryModalActionClass}
             >
               {isLoading ? 'Creating...' : 'Create'}
-            </button>
+            </Button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 
@@ -585,24 +582,34 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-[90%] md:w-full max-w-md rounded-none border border-gray-200 p-4 md:p-8 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-serif font-semibold text-black mb-6">
+    <Modal
+      open
+      onClose={onClose}
+      className="max-h-[90vh] max-w-md overflow-y-auto border-gray-200"
+      contentClassName="p-4 md:p-8"
+      showCloseButton={false}
+    >
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <h2 className="text-2xl font-serif font-semibold text-black">
           Edit Account
         </h2>
+        <Button onClick={onClose} variant="secondary" className="h-auto px-3 py-2 text-xs uppercase tracking-wide">
+          Close
+        </Button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
           {/* Account Nickname */}
           <div>
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Nickname
             </label>
-            <input
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Account_001"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -612,12 +619,12 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Game ID
             </label>
-            <input
+            <Input
               type="text"
               value={gameId}
               onChange={(e) => setGameId(e.target.value)}
               placeholder="e.g., 123456789"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -627,12 +634,12 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Zone
             </label>
-            <input
+            <Input
               type="text"
               value={zone}
               onChange={(e) => setZone(e.target.value)}
               placeholder="e.g., Asia"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -642,12 +649,12 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Server ID
             </label>
-            <input
+            <Input
               type="text"
               value={serverId}
               onChange={(e) => setServerId(e.target.value)}
               placeholder="e.g., server_asia_1"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -657,13 +664,13 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               Stock Diamond
             </label>
-            <input
+            <Input
               type="number"
               value={stockDiamond}
               onChange={(e) => setStockDiamond(Math.max(0, parseInt(e.target.value) || 0))}
               placeholder="0"
               min="0"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
           </div>
@@ -673,41 +680,42 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
               WDP Days
             </label>
-            <input
+            <Input
               type="number"
               value={wdpDays}
               onChange={(e) => setWdpDays(Math.max(0, parseInt(e.target.value) || 0))}
               placeholder="0"
               min="0"
-              className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+              className={inventoryUnderlineInputClass}
               disabled={isLoading}
             />
             <p className="text-xs text-gray-500 font-sans mt-2">
               1 day equals 20 diamonds. 1 WDP equals 80 instant diamonds plus 7 WDP days.
             </p>
             <div className="flex gap-2 mt-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setStockDiamond((prev) => prev + 80);
                   setWdpDays((prev) => prev + 7);
                 }}
-                className="px-3 py-1 bg-black text-white text-xs font-semibold rounded-none hover:bg-gray-800 disabled:opacity-50"
+                className={inventoryStepButtonClass}
                 disabled={isLoading}
               >
                 + 1 WDP
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => {
                   setStockDiamond((prev) => Math.max(0, prev - 80));
                   setWdpDays((prev) => Math.max(0, prev - 7));
                 }}
-                className="px-3 py-1 border border-black text-black text-xs font-semibold rounded-none hover:bg-gray-100 disabled:opacity-50"
+                variant="secondary"
+                className={inventoryStepButtonClass}
                 disabled={isLoading}
               >
                 - 1 WDP
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -717,54 +725,48 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
               Status
             </label>
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => setIsActive(true)}
                 disabled={isLoading}
-                className={`flex-1 px-4 py-2 rounded-none font-medium transition-colors ${
-                  isActive
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-gray-400'
-                }`}
+                variant={isActive ? 'primary' : 'secondary'}
+                className={cn('flex-1 h-auto px-4 py-2 text-sm', !isActive && 'text-gray-700')}
               >
                 Active
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => setIsActive(false)}
                 disabled={isLoading}
-                className={`flex-1 px-4 py-2 rounded-none font-medium transition-colors ${
-                  !isActive
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-gray-400'
-                }`}
+                variant={!isActive ? 'primary' : 'secondary'}
+                className={cn('flex-1 h-auto px-4 py-2 text-sm', isActive && 'text-gray-700')}
               >
                 Inactive
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="flex-1 px-6 py-2 border border-gray-300 bg-white text-black rounded-none font-medium hover:border-black hover:bg-gray-50 active:scale-95 disabled:opacity-50"
+              variant="secondary"
+              className={inventoryModalActionClass}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isLoading}
-              className="flex-1 px-6 py-2 bg-black text-white rounded-none font-medium hover:opacity-90 active:scale-95 disabled:opacity-50"
+              className={inventoryModalActionClass}
             >
               {isLoading ? 'Updating...' : 'Update'}
-            </button>
+            </Button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 

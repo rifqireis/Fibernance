@@ -1,7 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useFinishOrder, useCancelOrder } from '../api/orders';
+import { useCancelOrder } from '../api/orders';
 import { getOrders, ComboOrderResponse, finishOrder } from '../api/orders';
+import { Badge, Button, Card, FileTrigger, Input, Modal, Select, cn } from '../components/ui';
+
+const ordersTabButtonClass =
+  'h-auto border-b-2 border-x-0 border-t-0 px-6 py-4 text-sm font-semibold uppercase tracking-wide focus:ring-0 focus:ring-offset-0';
+
+const actionButtonClass = 'h-auto px-3 py-1.5 text-xs font-semibold uppercase tracking-wide';
+
+const modalToggleButtonClass = 'h-auto px-3 py-1 text-xs font-semibold uppercase tracking-wide';
+
+const modalHeaderButtonClass = 'h-auto px-3 py-2 text-xs uppercase tracking-wide';
 
 const Orders: React.FC = () => {
   const { data: orders, isLoading, error, refetch } = useQuery({
@@ -9,7 +19,6 @@ const Orders: React.FC = () => {
     queryFn: () => getOrders(0, 100),
   });
 
-  const finishMutation = useFinishOrder();
   const cancelMutation = useCancelOrder();
   const [selectedOrder, setSelectedOrder] = useState<ComboOrderResponse | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -23,8 +32,6 @@ const Orders: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'item' | 'diamond'>('date-desc');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [, setUpdateTrigger] = useState(0); // Trigger re-render untuk countdown update
-  const primaryActionClass = 'px-3 py-1.5 text-xs font-semibold text-white bg-black hover:bg-charcoal transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed';
-  const secondaryActionClass = 'px-3 py-1.5 text-xs font-semibold text-black border border-gray-300 hover:border-black hover:bg-gray-50 transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed';
 
   const handleFinish = async (order: ComboOrderResponse) => {
     setVideoUploadOrder(order);
@@ -118,11 +125,11 @@ const Orders: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     if (status === 'DONE') {
-      return <span className="status-badge status-badge-success">Done</span>;
+      return <Badge variant="success">Done</Badge>;
     } else if (status === 'CANCELLED') {
-      return <span className="status-badge status-badge-danger">Cancelled</span>;
+      return <Badge variant="error">Cancelled</Badge>;
     } else {
-      return <span className="status-badge status-badge-neutral">Pending</span>;
+      return <Badge variant="neutral">Pending</Badge>;
     }
   };
 
@@ -187,12 +194,12 @@ const Orders: React.FC = () => {
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
           {/* Search Input */}
           <div className="flex-1">
-            <input
+            <Input
               type="text"
               placeholder="Search by invoice, player ID, buyer, username, or item..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 text-sm border border-gray-300 rounded-none focus:border-black focus:outline-none transition-colors"
+              className="px-4"
             />
             {searchTerm && (
               <p className="mt-1 text-xs text-gray-600">
@@ -201,37 +208,37 @@ const Orders: React.FC = () => {
             )}
           </div>
 
-          {/* Sort Controls */}
           <div className="flex gap-2 items-center lg:flex-shrink-0">
             <label className="text-xs font-semibold text-charcoal uppercase tracking-wide whitespace-nowrap">
               Sort:
             </label>
-            <select
+            <Select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 text-sm border border-gray-300 bg-white rounded-none focus:border-black focus:outline-none transition-colors cursor-pointer"
+              className="px-3"
             >
               <option value="date-desc">Delivery Date (Newest)</option>
               <option value="date-asc">Delivery Date (Soonest)</option>
               <option value="item">Item Name (A-Z)</option>
               <option value="diamond">Total Diamond</option>
-            </select>
+            </Select>
 
             {/* Sort Direction Icon */}
             {sortBy === 'diamond' && (
-              <button
+              <Button
                 onClick={() => setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc')}
-                className="p-2 border border-gray-300 hover:bg-gray-50 transition-colors rounded-none"
+                variant="secondary"
+                className="h-10 w-10 p-0"
                 title={sortDirection === 'desc' ? 'Largest to Smallest' : 'Smallest to Largest'}
+                aria-label={sortDirection === 'desc' ? 'Sort largest to smallest' : 'Sort smallest to largest'}
               >
-                {/* Sort Icon - Lines getting smaller going down */}
                 <svg className={`w-4 h-4 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <line x1="3" y1="5" x2="21" y2="5" strokeWidth="2" strokeLinecap="round" />
                   <line x1="5" y1="11" x2="19" y2="11" strokeWidth="2" strokeLinecap="round" />
                   <line x1="9" y1="17" x2="15" y2="17" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -267,30 +274,34 @@ const Orders: React.FC = () => {
           <div>
             {/* Filter Tabs */}
             <div className="mb-6 flex items-center gap-0 border-b border-gray-200">
-              <button
+              <Button
                 onClick={() => setActiveTab('active')}
-                className={`px-6 py-4 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${
+                variant="ghost"
+                className={cn(
+                  ordersTabButtonClass,
                   activeTab === 'active'
-                    ? 'border-black text-black'
-                    : 'border-transparent text-gray-600 hover:text-black'
-                }`}
+                    ? 'border-black text-black hover:border-black hover:bg-transparent'
+                    : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
+                )}
               >
                 Active Orders ({filteredAndSortedOrders.filter((o) => o.status === 'PENDING').length})
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setActiveTab('history')}
-                className={`px-6 py-4 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${
+                variant="ghost"
+                className={cn(
+                  ordersTabButtonClass,
                   activeTab === 'history'
-                    ? 'border-black text-black'
-                    : 'border-transparent text-gray-600 hover:text-black'
-                }`}
+                    ? 'border-black text-black hover:border-black hover:bg-transparent'
+                    : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
+                )}
               >
                 History ({filteredAndSortedOrders.filter((o) => o.status !== 'PENDING').length})
-              </button>
+              </Button>
             </div>
 
             {/* Desktop: Table View */}
-            <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-none pb-4">
+            <Card className="hidden overflow-x-auto border-gray-200 pb-4 p-0 md:block">
               <table className="w-full min-w-[1200px]">
                 {/* Table Header */}
                 <thead>
@@ -371,40 +382,42 @@ const Orders: React.FC = () => {
                           <div className="flex items-center gap-2">
                             {/* Finish Button - Only show for PENDING */}
                             {order.status === 'PENDING' && (
-                              <button
+                              <Button
                                 onClick={() => handleFinish(order)}
                                 disabled={false}
-                                className={primaryActionClass}
+                                className={actionButtonClass}
                               >
                                 Finish
-                              </button>
+                              </Button>
                             )}
 
                             {/* Cancel Button - Only show for PENDING */}
                             {order.status === 'PENDING' && (
-                              <button
+                              <Button
                                 onClick={() => handleCancel(order.id)}
                                 disabled={cancelMutation.isPending}
-                                className={secondaryActionClass}
+                                variant="danger"
+                                className={actionButtonClass}
                               >
                                 {cancelMutation.isPending ? 'Cancelling' : 'Cancel'}
-                              </button>
+                              </Button>
                             )}
 
                             {/* Print Button - Always show */}
-                            <button
+                            <Button
                               onClick={() => handlePrint(order)}
-                              className={secondaryActionClass}
+                              variant="secondary"
+                              className={actionButtonClass}
                             >
                               Print
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>
                     ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
 
             {/* Mobile: Compact Expandable Cards */}
             <div className="md:hidden space-y-3">
@@ -415,7 +428,7 @@ const Orders: React.FC = () => {
                     : order.status !== 'PENDING'
                 )
                 .map((order) => (
-                  <div key={order.id} className="border border-gray-200 rounded-none bg-white overflow-hidden">
+                  <Card key={order.id} className="overflow-hidden border-gray-200 p-0">
                     {/* Card Header - Always Visible (Summary Info - Minimalis) */}
                     <button
                       onClick={() =>
@@ -522,10 +535,10 @@ const Orders: React.FC = () => {
                                 const accountName = typeof accountData === 'object' && accountData.name ? accountData.name : accountData;
                                 const deduction = order.deduction_breakdown[accountId] || 0;
                                 return (
-                                  <div key={accountId} className="flex justify-between items-center p-2 bg-white border border-gray-200 rounded-none">
+                                  <Card key={accountId} className="flex items-center justify-between border-gray-200 p-2">
                                     <span className="font-semibold">{accountName}</span>
                                     <span className="text-gray-600">{deduction.toLocaleString()}</span>
-                                  </div>
+                                  </Card>
                                 );
                               })}
                             </div>
@@ -560,41 +573,43 @@ const Orders: React.FC = () => {
                           <div className="flex gap-2">
                             {order.status === 'PENDING' && (
                               <>
-                                <button
+                                <Button
                                   onClick={() => handleFinish(order)}
                                   disabled={false}
-                                  className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-black hover:bg-charcoal disabled:opacity-50 transition-colors rounded-none"
+                                  className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
                                 >
                                   Finish Order
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   onClick={() => handleCancel(order.id)}
                                   disabled={cancelMutation.isPending}
-                                  className="flex-1 px-3 py-2 text-xs font-semibold text-black border border-gray-300 hover:border-black hover:bg-gray-50 disabled:opacity-50 transition-colors rounded-none"
+                                  variant="danger"
+                                  className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
                                 >
                                   {cancelMutation.isPending ? 'Cancelling' : 'Cancel Order'}
-                                </button>
+                                </Button>
                               </>
                             )}
                             {order.status === 'DONE' && (
-                              <button
+                              <Button
                                 onClick={() => handleFinishPrint(order)}
-                                className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-black hover:bg-charcoal transition-colors rounded-none"
+                                className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
                               >
                                 Delivery Notice
-                              </button>
+                              </Button>
                             )}
-                            <button
+                            <Button
                               onClick={() => handlePrint(order)}
-                              className="flex-1 px-3 py-2 text-xs font-semibold text-black border border-gray-300 hover:border-black hover:bg-gray-50 transition-colors rounded-none"
+                              variant="secondary"
+                              className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
                             >
                               Print
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
             </div>
           </div>
@@ -697,89 +712,70 @@ const DeliveryNotificationModal: React.FC<DeliveryNotificationModalProps> = ({ o
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-none max-h-[90vh] overflow-y-auto w-[90%] md:w-full max-w-sm border border-gray-200">
-        {/* Modal Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-lg font-serif font-semibold text-black">
-            Delivery Notice
-          </h2>
-          <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
-            <button
-              onClick={() => setLanguage('id')}
-              className={`px-3 py-1 text-xs font-semibold rounded-none transition-colors ${
-                language === 'id'
-                  ? 'bg-black text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              ID
-            </button>
-            <button
-              onClick={() => setLanguage('en')}
-              className={`px-3 py-1 text-xs font-semibold rounded-none transition-colors ${
-                language === 'en'
-                  ? 'bg-black text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              EN
-            </button>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-black transition-colors text-xl ml-4"
+    <Modal
+      open
+      onClose={onClose}
+      className="max-h-[90vh] max-w-sm overflow-y-auto border-gray-200"
+      contentClassName="p-0"
+      showCloseButton={false}
+    >
+      <div className="sticky top-0 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 py-4">
+        <h2 className="text-lg font-serif font-semibold text-black">Delivery Notice</h2>
+        <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+          <Button
+            onClick={() => setLanguage('id')}
+            variant={language === 'id' ? 'primary' : 'secondary'}
+            className={modalToggleButtonClass}
           >
-            ✕
-          </button>
-        </div>
-
-        {/* Notification Content */}
-        <div className="p-6 space-y-4">
-          {/* Order Info */}
-          <div className="bg-gray-50 p-4 rounded-none border border-gray-200">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Order</p>
-            <p className="text-sm font-semibold text-black">{order.invoice_ref}</p>
-            <p className="text-sm text-gray-700">{order.quantity}x {order.item_name}</p>
-          </div>
-
-          {/* Notification Message Box */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Notification Message</label>
-            <div className="bg-white border border-gray-300 rounded-none p-4">
-              <p 
-                className="text-sm text-black whitespace-pre-wrap font-mono"
-                style={{ lineHeight: '1.6' }}
-              >
-                {notificationText}
-              </p>
-            </div>
-          </div>
-
-          {/* Info Text */}
-          <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 px-4 py-3 rounded-none space-y-1">
-            <p>Copy the message and send it through your preferred delivery channel.</p>
-            <p>The language toggle changes the generated customer-facing text, not the modal UI.</p>
-          </div>
-        </div>
-
-        {/* Modal Footer - Action Buttons */}
-        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
-          <button
-            onClick={handleCopyText}
-            className="flex-1 px-4 py-2 bg-black text-white font-semibold text-sm hover:bg-charcoal transition-colors rounded-none"
+            ID
+          </Button>
+          <Button
+            onClick={() => setLanguage('en')}
+            variant={language === 'en' ? 'primary' : 'secondary'}
+            className={modalToggleButtonClass}
           >
-            Copy
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 text-black font-semibold text-sm hover:bg-gray-50 transition-colors rounded-none"
-          >
-            Close
-          </button>
+            EN
+          </Button>
         </div>
+        <Button onClick={onClose} variant="secondary" className={modalHeaderButtonClass}>
+          Close
+        </Button>
       </div>
-    </div>
+
+      <div className="space-y-4 p-6">
+        <Card className="border-gray-200 bg-gray-50 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Order</p>
+          <p className="text-sm font-semibold text-black">{order.invoice_ref}</p>
+          <p className="text-sm text-gray-700">{order.quantity}x {order.item_name}</p>
+        </Card>
+
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-gray-700">Notification Message</label>
+          <Card className="border-gray-300 p-4">
+            <p
+              className="whitespace-pre-wrap font-mono text-sm text-black"
+              style={{ lineHeight: '1.6' }}
+            >
+              {notificationText}
+            </p>
+          </Card>
+        </div>
+
+        <Card className="border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+          <p>Copy the message and send it through your preferred delivery channel.</p>
+          <p className="mt-1">The language toggle changes the generated customer-facing text, not the modal UI.</p>
+        </Card>
+      </div>
+
+      <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
+        <Button onClick={handleCopyText} className="flex-1">
+          Copy
+        </Button>
+        <Button onClick={onClose} variant="secondary" className="flex-1">
+          Close
+        </Button>
+      </div>
+    </Modal>
   );
 };
 
@@ -1052,79 +1048,62 @@ ${divider}`;
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-none max-h-[90vh] overflow-y-auto w-[90%] md:w-full max-w-sm border border-gray-200">
-        {/* Modal Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-serif font-semibold text-black">
-              {mode === 'invoice' ? 'INVOICE' : 'RECEIPT'}
-            </h2>
-            <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
-              <button
-                onClick={() => setLanguage('id')}
-                className={`px-3 py-1 text-xs font-semibold rounded-none transition-colors ${
-                  language === 'id'
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                ID
-              </button>
-              <button
-                onClick={() => setLanguage('en')}
-                className={`px-3 py-1 text-xs font-semibold rounded-none transition-colors ${
-                  language === 'en'
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                EN
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-black transition-colors text-xl"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Receipt Content */}
-        <div className="p-6">
-          <div
-            ref={receiptRef}
-            className="font-mono text-xs text-black whitespace-pre-wrap"
-            style={{ fontFamily: 'Courier New, monospace', lineHeight: '1.6' }}
-          >
-            {receiptText}
+    <Modal
+      open
+      onClose={onClose}
+      className="max-h-[90vh] max-w-sm overflow-y-auto border-gray-200"
+      contentClassName="p-0"
+      showCloseButton={false}
+    >
+      <div className="sticky top-0 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-serif font-semibold text-black">
+            {mode === 'invoice' ? 'INVOICE' : 'RECEIPT'}
+          </h2>
+          <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+            <Button
+              onClick={() => setLanguage('id')}
+              variant={language === 'id' ? 'primary' : 'secondary'}
+              className={modalToggleButtonClass}
+            >
+              ID
+            </Button>
+            <Button
+              onClick={() => setLanguage('en')}
+              variant={language === 'en' ? 'primary' : 'secondary'}
+              className={modalToggleButtonClass}
+            >
+              EN
+            </Button>
           </div>
         </div>
+        <Button onClick={onClose} variant="secondary" className={modalHeaderButtonClass}>
+          Close
+        </Button>
+      </div>
 
-        {/* Modal Footer - Action Buttons */}
-        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
-          <button
-            onClick={handleCopyText}
-            className="flex-1 px-4 py-2 bg-gray-100 text-black font-semibold text-sm hover:bg-gray-200 transition-colors rounded-none border border-gray-300"
-          >
-            Copy Text
-          </button>
-          <button
-            onClick={handlePrint}
-            className="flex-1 px-4 py-2 bg-black text-white font-semibold text-sm hover:bg-charcoal transition-colors rounded-none"
-          >
-            Print
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 text-black font-semibold text-sm hover:bg-gray-50 transition-colors rounded-none"
-          >
-            Close
-          </button>
+      <div className="p-6">
+        <div
+          ref={receiptRef}
+          className="whitespace-pre-wrap font-mono text-xs text-black"
+          style={{ fontFamily: 'Courier New, monospace', lineHeight: '1.6' }}
+        >
+          {receiptText}
         </div>
       </div>
-    </div>
+
+      <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
+        <Button onClick={handleCopyText} variant="secondary" className="flex-1">
+          Copy Text
+        </Button>
+        <Button onClick={handlePrint} className="flex-1">
+          Print
+        </Button>
+        <Button onClick={onClose} variant="secondary" className="flex-1">
+          Close
+        </Button>
+      </div>
+    </Modal>
   );
 };
 
@@ -1186,106 +1165,98 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ order, onClose }) =
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-none border border-gray-200 max-w-md w-full max-h-screen overflow-y-auto">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-lg font-serif font-semibold text-black">Upload Delivery Video</h2>
-          <button
-            onClick={onClose}
-            disabled={isUploading}
-            className="text-gray-600 hover:text-black transition-colors text-xl disabled:opacity-50"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Modal Content */}
-        <div className="p-6 space-y-4">
-          {/* Order Info */}
-          <div className="bg-gray-50 p-4 rounded-none border border-gray-200">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Order</p>
-            <p className="text-sm font-semibold text-black">{order.invoice_ref}</p>
-            <p className="text-sm text-gray-700">{order.quantity}x {order.item_name}</p>
-          </div>
-
-          {/* Success Message */}
-          {success && (
-            <div className="bg-green-50 border border-green-200 px-4 py-3 rounded-none">
-              <p className="text-sm font-semibold text-green-800">Video uploaded successfully.</p>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 px-4 py-3 rounded-none">
-              <p className="text-sm font-semibold text-red-800">{error}</p>
-            </div>
-          )}
-
-          {/* File Selection */}
-          {!success && (
-            <>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-                  Select Video File (Max 50 MB)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/*"
-                    onChange={handleFileSelect}
-                    disabled={isUploading}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="flex-1 px-4 py-3 border-2 border-dashed border-gray-300 hover:border-black bg-gray-50 hover:bg-gray-100 text-sm font-semibold text-black transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {selectedFile ? selectedFile.name : 'Select File'}
-                  </button>
-                </div>
-              </div>
-
-              {/* File Info */}
-              {selectedFile && (
-                <div className="bg-gray-50 border border-gray-200 px-4 py-3 rounded-none space-y-1">
-                  <p className="text-xs font-semibold text-gray-700 uppercase">Selected File</p>
-                  <p className="text-sm text-black">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                </div>
-              )}
-
-              {/* Info Text */}
-              <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 px-4 py-3 rounded-none space-y-1">
-                <p>Accepted formats: MP4, MOV, AVI, and other standard video files.</p>
-                <p>Maximum upload size: 50 MB.</p>
-                <p>The video will be uploaded to the Telegram delivery channel.</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
-          <button
-            onClick={onClose}
-            disabled={isUploading}
-            className="flex-1 px-4 py-2 border border-gray-300 text-black font-semibold text-sm hover:bg-gray-50 transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile || isUploading || success}
-            className="flex-1 px-4 py-2 bg-black text-white font-semibold text-sm hover:bg-charcoal transition-colors rounded-none disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isUploading ? 'Uploading...' : 'Upload Video'}
-          </button>
-        </div>
+    <Modal
+      open
+      onClose={isUploading ? undefined : onClose}
+      className="max-h-screen max-w-md overflow-y-auto border-gray-200"
+      contentClassName="p-0"
+      showCloseButton={false}
+      closeOnOverlayClick={!isUploading}
+    >
+      <div className="flex items-center justify-between border-b border-gray-200 p-6">
+        <h2 className="text-lg font-serif font-semibold text-black">Upload Delivery Video</h2>
+        <Button
+          onClick={onClose}
+          disabled={isUploading}
+          variant="secondary"
+          className={modalHeaderButtonClass}
+        >
+          Close
+        </Button>
       </div>
-    </div>
+
+      <div className="space-y-4 p-6">
+        <Card className="border-gray-200 bg-gray-50 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Order</p>
+          <p className="text-sm font-semibold text-black">{order.invoice_ref}</p>
+          <p className="text-sm text-gray-700">{order.quantity}x {order.item_name}</p>
+        </Card>
+
+        {success && (
+          <Card className="border-green-200 bg-green-50 px-4 py-3">
+            <Badge variant="success">Uploaded</Badge>
+            <p className="mt-3 text-sm font-semibold text-green-800">Video uploaded successfully.</p>
+          </Card>
+        )}
+
+        {error && (
+          <Card className="border-red-200 bg-red-50 px-4 py-3">
+            <Badge variant="error">Upload Error</Badge>
+            <p className="mt-3 text-sm font-semibold text-red-800">{error}</p>
+          </Card>
+        )}
+
+        {!success && (
+          <>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-gray-700">
+                Select Video File (Max 50 MB)
+              </label>
+              <div className="flex items-center gap-2">
+                <FileTrigger
+                  ref={fileInputRef}
+                  accept="video/*"
+                  onFileChange={handleFileSelect}
+                  disabled={isUploading}
+                  buttonLabel={selectedFile ? selectedFile.name : 'Select File'}
+                />
+              </div>
+            </div>
+
+            {selectedFile && (
+              <Card className="space-y-1 border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase text-gray-700">Selected File</p>
+                <p className="text-sm text-black">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+              </Card>
+            )}
+
+            <Card className="space-y-1 border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+              <p>Accepted formats: MP4, MOV, AVI, and other standard video files.</p>
+              <p>Maximum upload size: 50 MB.</p>
+              <p>The video will be uploaded to the Telegram delivery channel.</p>
+            </Card>
+          </>
+        )}
+      </div>
+
+      <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
+        <Button
+          onClick={onClose}
+          disabled={isUploading}
+          variant="secondary"
+          className="flex-1"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleUpload}
+          disabled={!selectedFile || isUploading || success}
+          className="flex-1"
+        >
+          {isUploading ? 'Uploading...' : 'Upload Video'}
+        </Button>
+      </div>
+    </Modal>
   );
 };
 

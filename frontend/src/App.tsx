@@ -5,6 +5,15 @@ import Cashier from './pages/Cashier'
 import Orders from './pages/Orders'
 import Digiflazz from './pages/Digiflazz'
 import DataSync from './pages/DataSync'
+import { Button, cn } from './components/ui'
+
+const navigationLinkClass = (isActive: boolean) =>
+  cn(
+    'block px-4 py-3 text-sm font-sans font-semibold transition-all duration-200 rounded-none',
+    isActive
+      ? 'bg-black !text-white'
+      : 'text-gray-500 hover:bg-gray-100 hover:text-black',
+  )
 
 const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -52,13 +61,7 @@ const App: React.FC = () => {
                 <NavLink
                   to="/"
                   onClick={closeMenu}
-                  className={({ isActive }) =>
-                    `block py-3 px-4 text-sm font-sans font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-black !text-white'
-                        : 'text-gray-500 hover:text-black hover:bg-gray-100'
-                    }`
-                  }
+                  className={({ isActive }) => navigationLinkClass(isActive)}
                 >
                   Inventory
                 </NavLink>
@@ -69,13 +72,7 @@ const App: React.FC = () => {
                 <NavLink
                   to="/cashier"
                   onClick={closeMenu}
-                  className={({ isActive }) =>
-                    `block py-3 px-4 text-sm font-sans font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-black !text-white'
-                        : 'text-gray-500 hover:text-black hover:bg-gray-100'
-                    }`
-                  }
+                  className={({ isActive }) => navigationLinkClass(isActive)}
                 >
                   Cashier
                 </NavLink>
@@ -86,13 +83,7 @@ const App: React.FC = () => {
                 <NavLink
                   onClick={closeMenu}
                   to="/orders"
-                  className={({ isActive }) =>
-                    `block py-3 px-4 text-sm font-sans font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-black !text-white'
-                        : 'text-gray-500 hover:text-black hover:bg-gray-100'
-                    }`
-                  }
+                  className={({ isActive }) => navigationLinkClass(isActive)}
                 >
                   Orders
                 </NavLink>
@@ -103,13 +94,7 @@ const App: React.FC = () => {
                 <NavLink
                   onClick={closeMenu}
                   to="/digiflazz"
-                  className={({ isActive }) =>
-                    `block py-3 px-4 text-sm font-sans font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-black !text-white'
-                        : 'text-gray-500 hover:text-black hover:bg-gray-100'
-                    }`
-                  }
+                  className={({ isActive }) => navigationLinkClass(isActive)}
                 >
                   Digiflazz
                 </NavLink>
@@ -120,13 +105,7 @@ const App: React.FC = () => {
                 <NavLink
                   onClick={closeMenu}
                   to="/data-sync"
-                  className={({ isActive }) =>
-                    `block py-3 px-4 text-sm font-sans font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-black !text-white'
-                        : 'text-gray-500 hover:text-black hover:bg-gray-100'
-                    }`
-                  }
+                  className={({ isActive }) => navigationLinkClass(isActive)}
                 >
                   Data Sync
                 </NavLink>
@@ -144,9 +123,10 @@ const App: React.FC = () => {
 
         {/* Mobile Header */}
         <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-          <button
+          <Button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1 hover:bg-gray-100 transition-colors rounded-none"
+            variant="ghost"
+            className="h-auto border-0 p-1 hover:border-0 hover:bg-gray-100"
             aria-label="Toggle menu"
           >
             <svg
@@ -162,7 +142,7 @@ const App: React.FC = () => {
                 d="M4 6h16M4 12h16M4 18h16"
               />
             </svg>
-          </button>
+          </Button>
           <h1 className="text-lg font-serif font-semibold text-black">Fibernance</h1>
           <div className="w-6"></div>
         </header>

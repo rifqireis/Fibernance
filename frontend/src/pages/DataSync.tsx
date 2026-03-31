@@ -1,6 +1,15 @@
 import React, { useRef, useState } from 'react';
 import { useConfirmImport, useExportData, useImportPreview } from '../api/data_sync';
 import type { ImportPreview, ImportResult } from '../api/data_sync';
+import { Badge, Button, Card, FileTrigger, Modal, RadioCardGroup } from '../components/ui';
+
+const dataSyncActionButtonClass = 'h-auto w-full py-3 text-xs uppercase tracking-wide';
+const dataSyncModalButtonClass = 'h-auto flex-1 py-3 text-xs uppercase tracking-wide';
+const dataSyncScopeOptions = [
+  { value: 'inventory', label: 'Inventory only' },
+  { value: 'orders', label: 'Orders only' },
+  { value: 'both', label: 'Inventory and orders' },
+] as const;
 
 const DataSync: React.FC = () => {
   const [exportType, setExportType] = useState<'inventory' | 'orders' | 'both'>('both');
@@ -134,7 +143,7 @@ const DataSync: React.FC = () => {
 
       <div className="px-4 py-8 lg:px-8">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="panel p-6 lg:p-8">
+          <Card className="border-gray-200 p-6 lg:p-8">
             <p className="section-label">Export</p>
             <h2 className="mt-2 text-2xl font-serif font-semibold text-black">Download Structured Data</h2>
             <p className="mt-2 text-sm text-gray-600">
@@ -143,43 +152,28 @@ const DataSync: React.FC = () => {
 
             <div className="mt-8 space-y-4">
               <label className="section-label block">Export Scope</label>
-              <div className="space-y-3">
-                {(['inventory', 'orders', 'both'] as const).map((type) => (
-                  <label
-                    key={type}
-                    className="flex items-center gap-3 border border-gray-200 px-4 py-4 rounded-none text-sm text-black"
-                  >
-                    <input
-                      type="radio"
-                      name="exportType"
-                      value={type}
-                      checked={exportType === type}
-                      onChange={(event) => setExportType(event.target.value as typeof type)}
-                      className="h-4 w-4"
-                    />
-                    <span className="font-medium">
-                      {type === 'inventory' && 'Inventory only'}
-                      {type === 'orders' && 'Orders only'}
-                      {type === 'both' && 'Inventory and orders'}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <RadioCardGroup
+                name="exportType"
+                value={exportType}
+                onValueChange={(value) => setExportType(value as typeof exportType)}
+                options={dataSyncScopeOptions.map((option) => ({ ...option }))}
+                disabled={exportMutation.isPending}
+              />
             </div>
 
             <div className="mt-8 border-t border-gray-200 pt-8">
-              <button
+              <Button
                 type="button"
                 onClick={handleExport}
                 disabled={exportMutation.isPending}
-                className="btn-primary w-full py-3 text-xs uppercase tracking-wide"
+                className={dataSyncActionButtonClass}
               >
                 {exportMutation.isPending ? 'Exporting' : 'Export Data'}
-              </button>
+              </Button>
             </div>
-          </section>
+          </Card>
 
-          <section className="panel p-6 lg:p-8">
+          <Card className="border-gray-200 p-6 lg:p-8">
             <p className="section-label">Import</p>
             <h2 className="mt-2 text-2xl font-serif font-semibold text-black">Review and Restore</h2>
             <p className="mt-2 text-sm text-gray-600">
@@ -188,38 +182,24 @@ const DataSync: React.FC = () => {
 
             <div className="mt-8 space-y-4">
               <label className="section-label block">Import Scope</label>
-              <div className="space-y-3">
-                {(['inventory', 'orders', 'both'] as const).map((type) => (
-                  <label
-                    key={type}
-                    className="flex items-center gap-3 border border-gray-200 px-4 py-4 rounded-none text-sm text-black"
-                  >
-                    <input
-                      type="radio"
-                      name="importType"
-                      value={type}
-                      checked={importType === type}
-                      onChange={(event) => setImportType(event.target.value as typeof type)}
-                      className="h-4 w-4"
-                    />
-                    <span className="font-medium">
-                      {type === 'inventory' && 'Inventory only'}
-                      {type === 'orders' && 'Orders only'}
-                      {type === 'both' && 'Inventory and orders'}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <RadioCardGroup
+                name="importType"
+                value={importType}
+                onValueChange={(value) => setImportType(value as typeof importType)}
+                options={dataSyncScopeOptions.map((option) => ({ ...option }))}
+                disabled={previewMutation.isPending || confirmMutation.isPending}
+              />
             </div>
 
             <div className="mt-8">
               <label className="section-label block">JSON File</label>
-              <input
+              <FileTrigger
                 ref={fileInputRef}
-                type="file"
                 accept=".json"
-                onChange={handleFileSelect}
-                className="mt-2 text-sm"
+                onFileChange={handleFileSelect}
+                buttonLabel={selectedFile ? selectedFile.name : 'Select JSON File'}
+                className="mt-2"
+                disabled={previewMutation.isPending || confirmMutation.isPending}
               />
               {selectedFile && (
                 <p className="mt-3 text-xs uppercase tracking-wide text-gray-500">
@@ -229,148 +209,174 @@ const DataSync: React.FC = () => {
             </div>
 
             <div className="mt-8 flex flex-col gap-3 border-t border-gray-200 pt-8">
-              <button
+              <Button
                 type="button"
                 onClick={handlePreviewImport}
                 disabled={!selectedFile || previewMutation.isPending}
-                className="btn-primary w-full py-3 text-xs uppercase tracking-wide"
+                className={dataSyncActionButtonClass}
               >
                 {previewMutation.isPending ? 'Loading Preview' : 'Preview Changes'}
-              </button>
+              </Button>
               <p className="text-xs text-gray-500">
                 A preview is required before any import can be confirmed.
               </p>
             </div>
-          </section>
+          </Card>
         </div>
       </div>
 
       {showPreviewModal && importPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-gray-200 bg-white rounded-none">
-            <div className="sticky top-0 border-b border-gray-200 bg-white px-6 py-5">
+        <Modal
+          open
+          onClose={confirmMutation.isPending ? undefined : () => setShowPreviewModal(false)}
+          className="max-h-[90vh] max-w-3xl overflow-y-auto border-gray-200"
+          contentClassName="p-0"
+          showCloseButton={false}
+          closeOnOverlayClick={!confirmMutation.isPending}
+        >
+          <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-6 py-5">
+            <div>
               <p className="section-label">Import Preview</p>
               <h3 className="mt-2 text-2xl font-serif font-semibold text-black">Review Structural Impact</h3>
               <p className="mt-2 text-sm text-gray-600">Confirm what will be added or replaced before continuing.</p>
             </div>
-
-            <div className="space-y-6 p-6">
-              <div className="border border-red-200 bg-red-50 p-4 rounded-none">
-                <p className="status-badge status-badge-danger">Destructive Change</p>
-                <div className="mt-4 space-y-2 text-sm text-gray-800">
-                  <p>Records to delete: <span className="font-semibold">{importPreview.records_to_delete}</span></p>
-                  <p>Records to add: <span className="font-semibold">{importPreview.records_to_add}</span></p>
-                </div>
-              </div>
-
-              <div>
-                <p className="section-label">Affected Items</p>
-                <div className="mt-3 max-h-40 space-y-2 overflow-y-auto border border-gray-200 bg-gray-50 p-4 rounded-none">
-                  {importPreview.affected_items.slice(0, 10).map((item, index) => (
-                    <p key={index} className="text-sm font-mono text-gray-700">
-                      {item}
-                    </p>
-                  ))}
-                  {importPreview.affected_items.length > 10 && (
-                    <p className="text-sm text-gray-500">
-                      {importPreview.affected_items.length - 10} additional items are hidden from this preview.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {Object.keys(importPreview.preview_sample).length > 0 && (
-                <div>
-                  <p className="section-label">Sample Payload</p>
-                  <pre className="mt-3 max-h-48 overflow-x-auto border border-gray-200 bg-gray-50 p-4 text-xs text-gray-700 rounded-none">
-                    {JSON.stringify(importPreview.preview_sample, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-
-            <div className="sticky bottom-0 flex gap-3 border-t border-gray-200 bg-white px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setShowPreviewModal(false)}
-                className="btn-secondary flex-1 py-3 text-xs uppercase tracking-wide"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmImport}
-                disabled={confirmMutation.isPending}
-                className="btn-primary flex-1 py-3 text-xs uppercase tracking-wide"
-              >
-                {confirmMutation.isPending ? 'Importing' : 'Confirm Import'}
-              </button>
-            </div>
+            <Button
+              type="button"
+              onClick={() => setShowPreviewModal(false)}
+              disabled={confirmMutation.isPending}
+              variant="secondary"
+              className="h-auto px-3 py-2 text-xs uppercase tracking-wide"
+            >
+              Close
+            </Button>
           </div>
-        </div>
+
+          <div className="space-y-6 p-6">
+            <Card className="border-red-200 bg-red-50 p-4">
+              <Badge variant="error">Destructive Change</Badge>
+              <div className="mt-4 space-y-2 text-sm text-gray-800">
+                <p>Records to delete: <span className="font-semibold">{importPreview.records_to_delete}</span></p>
+                <p>Records to add: <span className="font-semibold">{importPreview.records_to_add}</span></p>
+              </div>
+            </Card>
+
+            <div>
+              <p className="section-label">Affected Items</p>
+              <Card className="mt-3 max-h-40 space-y-2 overflow-y-auto border-gray-200 bg-gray-50 p-4">
+                {importPreview.affected_items.slice(0, 10).map((item, index) => (
+                  <p key={index} className="text-sm font-mono text-gray-700">
+                    {item}
+                  </p>
+                ))}
+                {importPreview.affected_items.length > 10 && (
+                  <p className="text-sm text-gray-500">
+                    {importPreview.affected_items.length - 10} additional items are hidden from this preview.
+                  </p>
+                )}
+              </Card>
+            </div>
+
+            {Object.keys(importPreview.preview_sample).length > 0 && (
+              <div>
+                <p className="section-label">Sample Payload</p>
+                <pre className="mt-3 max-h-48 overflow-x-auto border border-gray-200 bg-gray-50 p-4 text-xs text-gray-700 rounded-none">
+                  {JSON.stringify(importPreview.preview_sample, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          <div className="sticky bottom-0 flex gap-3 border-t border-gray-200 bg-white px-6 py-4">
+            <Button
+              type="button"
+              onClick={() => setShowPreviewModal(false)}
+              disabled={confirmMutation.isPending}
+              variant="secondary"
+              className={dataSyncModalButtonClass}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmImport}
+              disabled={confirmMutation.isPending}
+              className={dataSyncModalButtonClass}
+            >
+              {confirmMutation.isPending ? 'Importing' : 'Confirm Import'}
+            </Button>
+          </div>
+        </Modal>
       )}
 
       {showResultModal && importResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="w-full max-w-lg border border-gray-200 bg-white rounded-none">
-            <div className="border-b border-gray-200 px-6 py-5">
-              <p className={`status-badge ${importResult.success ? 'status-badge-success' : 'status-badge-danger'}`}>
-                {importResult.success ? 'Import Complete' : 'Import Failed'}
-              </p>
-              <h3 className="mt-3 text-2xl font-serif font-semibold text-black">Import Result</h3>
-            </div>
-
-            <div className="space-y-4 p-6">
-              <p className="text-sm text-gray-800">{importResult.message}</p>
-
-              {importResult.backup_created && (
-                <div className="border border-gray-200 bg-gray-50 p-4 rounded-none">
-                  <p className="section-label">Backup</p>
-                  <p className="mt-2 text-sm text-gray-700">
-                    A backup file was downloaded before the import was applied.
-                  </p>
-                </div>
-              )}
-
-              {importResult.success && (
-                <div className="border border-green-200 bg-green-50 p-4 rounded-none">
-                  <p className="status-badge status-badge-success">Applied</p>
-                  <div className="mt-4 space-y-2 text-sm text-gray-800">
-                    {importResult.accounts_added > 0 && <p>Accounts added: {importResult.accounts_added}</p>}
-                    {importResult.accounts_deleted > 0 && <p>Accounts deleted: {importResult.accounts_deleted}</p>}
-                    {importResult.orders_added > 0 && <p>Orders added: {importResult.orders_added}</p>}
-                    {importResult.orders_deleted > 0 && <p>Orders deleted: {importResult.orders_deleted}</p>}
-                  </div>
-                </div>
-              )}
-
-              {importResult.errors.length > 0 && (
-                <div className="border border-red-200 bg-red-50 p-4 rounded-none">
-                  <p className="status-badge status-badge-danger">Errors</p>
-                  <div className="mt-4 space-y-1 text-sm text-gray-800">
-                    {importResult.errors.map((error, index) => (
-                      <p key={index}>{error}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 bg-white px-6 py-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowResultModal(false);
-                  setImportResult(null);
-                  window.location.reload();
-                }}
-                className="btn-primary w-full py-3 text-xs uppercase tracking-wide"
-              >
-                Close
-              </button>
-            </div>
+        <Modal
+          open
+          onClose={() => {
+            setShowResultModal(false);
+            setImportResult(null);
+            window.location.reload();
+          }}
+          className="max-w-lg border-gray-200"
+          contentClassName="p-0"
+          showCloseButton={false}
+        >
+          <div className="border-b border-gray-200 px-6 py-5">
+            <Badge variant={importResult.success ? 'success' : 'error'}>
+              {importResult.success ? 'Import Complete' : 'Import Failed'}
+            </Badge>
+            <h3 className="mt-3 text-2xl font-serif font-semibold text-black">Import Result</h3>
           </div>
-        </div>
+
+          <div className="space-y-4 p-6">
+            <p className="text-sm text-gray-800">{importResult.message}</p>
+
+            {importResult.backup_created && (
+              <Card className="border-gray-200 bg-gray-50 p-4">
+                <p className="section-label">Backup</p>
+                <p className="mt-2 text-sm text-gray-700">
+                  A backup file was downloaded before the import was applied.
+                </p>
+              </Card>
+            )}
+
+            {importResult.success && (
+              <Card className="border-green-200 bg-green-50 p-4">
+                <Badge variant="success">Applied</Badge>
+                <div className="mt-4 space-y-2 text-sm text-gray-800">
+                  {importResult.accounts_added > 0 && <p>Accounts added: {importResult.accounts_added}</p>}
+                  {importResult.accounts_deleted > 0 && <p>Accounts deleted: {importResult.accounts_deleted}</p>}
+                  {importResult.orders_added > 0 && <p>Orders added: {importResult.orders_added}</p>}
+                  {importResult.orders_deleted > 0 && <p>Orders deleted: {importResult.orders_deleted}</p>}
+                </div>
+              </Card>
+            )}
+
+            {importResult.errors.length > 0 && (
+              <Card className="border-red-200 bg-red-50 p-4">
+                <Badge variant="error">Errors</Badge>
+                <div className="mt-4 space-y-1 text-sm text-gray-800">
+                  {importResult.errors.map((error, index) => (
+                    <p key={index}>{error}</p>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+
+          <div className="border-t border-gray-200 bg-white px-6 py-4">
+            <Button
+              type="button"
+              onClick={() => {
+                setShowResultModal(false);
+                setImportResult(null);
+                window.location.reload();
+              }}
+              className={dataSyncActionButtonClass}
+            >
+              Close
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

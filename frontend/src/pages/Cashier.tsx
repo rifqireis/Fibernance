@@ -2,6 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { useAccounts } from '../api/accounts';
 import { useCreateComboOrder } from '../api/orders';
 import { useCashierStore } from '../store/cashierStore';
+import { Badge, Button, Card, Input, Textarea, cn } from '../components/ui';
+
+const cashierUnderlineInputClass =
+  'h-auto border-0 border-b border-gray-300 bg-transparent px-0 py-2 focus:border-black focus:ring-0';
+
+const parserPrimaryButtonClass = 'h-auto flex-1 py-2 text-sm';
+const parserSecondaryButtonClass = 'h-auto px-4 py-2 text-sm';
+const cashierPrimaryActionClass = 'h-auto w-full py-3 text-sm uppercase tracking-wide';
+
+const getParserBadgeVariant = (type: 'idle' | 'success' | 'error' | 'partial') => {
+  if (type === 'success') {
+    return 'success' as const;
+  }
+
+  if (type === 'error') {
+    return 'error' as const;
+  }
+
+  return 'neutral' as const;
+};
 
 const Cashier: React.FC = () => {
   const [parserText, setParserText] = useState('');
@@ -283,7 +303,7 @@ const Cashier: React.FC = () => {
               </h2>
 
               {/* Itemku Parser - Collapsible */}
-              <div className="mb-8 border border-gray-200 rounded-none">
+              <Card className="mb-8 border-gray-200 p-0">
                 {/* Collapsible Header */}
                 <button
                   type="button"
@@ -295,14 +315,14 @@ const Cashier: React.FC = () => {
                       Itemku Parser
                     </span>
                     {parserStatus.type === 'success' && (
-                      <span className="status-badge status-badge-success">
+                      <Badge variant="success">
                         Success
-                      </span>
+                      </Badge>
                     )}
                     {parserStatus.type === 'partial' && (
-                      <span className="status-badge status-badge-neutral">
+                      <Badge variant="neutral">
                         Partial
-                      </span>
+                      </Badge>
                     )}
                   </div>
                   <svg
@@ -325,48 +345,43 @@ const Cashier: React.FC = () => {
                 {/* Collapsible Content */}
                 {isParserOpen && (
                   <div className="p-4 border-t border-gray-200 bg-white space-y-3">
-                    <textarea
+                    <Textarea
                       value={parserText}
                       onChange={(e) => setParserText(e.target.value)}
                       placeholder="Paste Itemku raw text here..."
-                      className="w-full bg-white text-sm text-black font-sans py-2 px-3 border border-gray-300 rounded-none focus:border-black focus:outline-none transition-colors resize-none h-20"
+                      className="h-20 resize-none"
                     />
 
                     {/* Buttons */}
                     <div className="flex gap-2">
-                      <button
+                      <Button
                         type="button"
                         onClick={handleParseButtonClick}
-                        className="flex-1 bg-black text-white font-sans font-semibold py-2 rounded-none transition-all hover:opacity-90 active:scale-95"
+                        className={parserPrimaryButtonClass}
                       >
                         Parse Text
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onClick={() => {
                           setParserText('');
                           setParserStatus({ type: 'idle', message: '' });
                         }}
-                        className="px-4 py-2 border border-gray-300 bg-white text-black font-sans font-semibold rounded-none transition-all hover:border-black active:scale-95"
+                        variant="secondary"
+                        className={parserSecondaryButtonClass}
                       >
                         Clear
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Parser Status Message */}
                     {parserStatus.type !== 'idle' && (
-                      <div className="border border-gray-200 bg-gray-50 p-3 rounded-none text-xs font-sans text-black">
-                        <p className={`inline-flex items-center px-3 py-1 text-[10px] font-semibold uppercase tracking-wide rounded-none border ${
-                          parserStatus.type === 'success'
-                            ? 'bg-green-50 border-green-200 text-green-800'
-                            : parserStatus.type === 'error'
-                            ? 'bg-red-50 border-red-200 text-red-800'
-                            : 'bg-gray-100 border-gray-300 text-gray-700'
-                        }`}>
+                      <Card className="border-gray-200 bg-gray-50 p-3 text-xs text-black">
+                        <Badge variant={getParserBadgeVariant(parserStatus.type)} className="text-[10px]">
                           {parserStatus.type}
-                        </p>
+                        </Badge>
                         <p className="mt-3">{parserStatus.message}</p>
-                      </div>
+                      </Card>
                     )}
 
                     <p className="text-xs text-gray-500 font-sans">
@@ -374,7 +389,7 @@ const Cashier: React.FC = () => {
                     </p>
                   </div>
                 )}
-              </div>
+              </Card>
 
               {/* GROUP 1: Order Info */}
               <div className="grid grid-cols-2 gap-4 mb-6">
@@ -383,12 +398,12 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Order ID
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={orderId}
                     onChange={(e) => setOrderId(e.target.value)}
                     placeholder="e.g., OD0000001"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
 
@@ -397,12 +412,12 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Item Name
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={itemName}
                     onChange={handleItemNameChange}
                     placeholder="e.g., Starlight Card"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
               </div>
@@ -414,12 +429,12 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Target ID
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={targetId}
                     onChange={handleTargetIdChange}
                     placeholder="Game ID"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
 
@@ -428,12 +443,12 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Zone
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={serverId}
                     onChange={handleServerIdChange}
                     placeholder="Zone ID"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
               </div>
@@ -445,12 +460,12 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Target Nickname
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={buyerName}
                     onChange={handleBuyerNameChange}
                     placeholder="Player nick"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
 
@@ -459,12 +474,12 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Purchaser Name
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={purchaserName}
                     onChange={(e) => setPurchaserName(e.target.value)}
                     placeholder="Buyer name"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
               </div>
@@ -476,13 +491,13 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     QTY
                   </label>
-                  <input
+                  <Input
                     type="number"
                     value={quantity}
                     onChange={handleQuantityChange}
                     placeholder="1"
                     min="1"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
 
@@ -491,13 +506,13 @@ const Cashier: React.FC = () => {
                   <label className="text-[10px] font-semibold text-charcoal font-sans uppercase tracking-wide mb-1 block">
                     Total Diamond
                   </label>
-                  <input
+                  <Input
                     type="number"
                     value={totalDiamond}
                     onChange={handleTotalDiamondChange}
                     placeholder="0"
                     min="0"
-                    className="w-full bg-transparent text-sm text-black font-sans py-2 border-b border-gray-300 focus:border-black focus:outline-none transition-colors"
+                    className={cashierUnderlineInputClass}
                   />
                 </div>
               </div>
@@ -541,7 +556,7 @@ const Cashier: React.FC = () => {
               </div>
 
               {/* Process Button */}
-              <button
+              <Button
                 onClick={handleProcessOrder}
                 disabled={
                   createOrderMutation.isPending ||
@@ -552,12 +567,12 @@ const Cashier: React.FC = () => {
                   !itemName.trim() ||
                   totalDiamond <= 0
                 }
-                className="w-full bg-black text-white font-sans font-semibold py-3 rounded-none transition-all duration-200 hover:bg-charcoal active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={cashierPrimaryActionClass}
               >
                 {createOrderMutation.isPending
                   ? 'PROCESSING...'
                   : 'PROCESS ORDER'}
-              </button>
+              </Button>
 
               {/* Error Message */}
               {createOrderMutation.isError && (
@@ -670,9 +685,9 @@ const AccountListByCategory: React.FC<AccountListByCategoryProps> = ({
           <h3 className="text-sm font-serif font-bold text-black uppercase tracking-wide">
             {title}
           </h3>
-          <span className="text-xs font-sans bg-gray-200 text-gray-700 px-2 py-1 rounded-none">
+          <Badge variant="neutral" className="px-2 py-1 tracking-normal">
             {accountList.length}
-          </span>
+          </Badge>
         </div>
 
         {/* Accounts in this category */}
@@ -711,15 +726,14 @@ const AccountCheckboxItem: React.FC<AccountCheckboxItemProps> = ({
   onToggle,
 }) => {
   return (
-    <div
+    <Card
       onClick={onToggle}
-      className={`flex items-start gap-4 p-4 border rounded-none cursor-pointer transition-colors ${
+      className={cn('flex cursor-pointer items-start gap-4 border-gray-300 p-4 transition-colors',
         category === 'cukup'
-          ? 'border-gray-300 bg-white hover:bg-gray-50'
+          ? 'bg-white hover:bg-gray-50'
           : category === 'cukup-potensial'
-          ? 'border-gray-300 bg-gray-50 hover:bg-gray-100'
-          : 'border-gray-300 bg-white hover:bg-gray-50'
-      }`}
+          ? 'bg-gray-50 hover:bg-gray-100'
+          : 'bg-white hover:bg-gray-50')}
     >
       {/* Custom Checkbox */}
       <div
@@ -784,7 +798,7 @@ const AccountCheckboxItem: React.FC<AccountCheckboxItemProps> = ({
           <p className="text-xs text-gray-500 font-sans mt-2">Inactive</p>
         )}
       </div>
-    </div>
+    </Card>
   );
 };
 
