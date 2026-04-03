@@ -17,6 +17,7 @@ export interface Account {
   potential_diamond: number; // stock_diamond + wdp potential
   wdp_potential_capped: number; // WDP potential (max 140)
   classification: string; // "Available" | "Forecast" | "Preorder"
+  deficit_diamond: number;
 }
 
 export interface CreateAccountPayload {

@@ -41,10 +41,15 @@ class Account(SQLModel, table=True):
         ge=0,
         description="Current diamond stock inventory",
     )
+    deficit_diamond: int = Field(
+        default=0,
+        ge=0,
+        description="Amount of diamonds currently in deficit or shortage requiring restock",
+    )
     pending_wdp: int = Field(
         default=0,
         ge=0,
-        description="Pending Weekly Diamond Pass hutang (debt)",
+        description="Pending Weekly Diamond Pass debt",
     )
     is_active: bool = Field(
         default=True,
@@ -67,6 +72,7 @@ class Account(SQLModel, table=True):
                 "name": "Account_001",
                 "server_id": "server_asia_1",
                 "stock_diamond": 5000,
+                "deficit_diamond": 0,
                 "pending_wdp": 500,
                 "is_active": True,
             }
@@ -81,6 +87,7 @@ class AccountCreate(SQLModel):
     zone: str = Field(default="", max_length=50)
     server_id: str = Field(min_length=1, max_length=50)
     stock_diamond: int = Field(default=0, ge=0)
+    deficit_diamond: int = Field(default=0, ge=0)
     pending_wdp: int = Field(default=0, ge=0)
     is_active: bool = Field(default=True)
 
@@ -93,6 +100,7 @@ class AccountUpdate(SQLModel):
     zone: Optional[str] = Field(None, min_length=1, max_length=50)
     server_id: Optional[str] = Field(None, min_length=1, max_length=50)
     stock_diamond: Optional[int] = Field(None, ge=0)
+    deficit_diamond: Optional[int] = Field(None, ge=0)
     pending_wdp: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
 
@@ -106,6 +114,7 @@ class AccountResponse(SQLModel):
     zone: str
     server_id: str
     stock_diamond: int
+    deficit_diamond: int
     pending_wdp: int
     is_active: bool
     created_at: datetime
@@ -167,7 +176,7 @@ class Order(SQLModel, table=True):
     quantity: int = Field(
         default=1,
         ge=1,
-        description="Jumlah item yang dibeli",
+        description="Quantity of items purchased",
     )
     total_diamond: int = Field(
         ge=0,
@@ -177,7 +186,7 @@ class Order(SQLModel, table=True):
         default="PENDING",
         min_length=1,
         max_length=50,
-        description="Order status (PENDING, DONE, CANCELLED, etc.)",
+        description="Order status (supports PENDING, WAITING_FRIEND_ADD, FRIEND_DELAY_ACTIVE, AWAITING_RESTOCK, READY_TO_GIFT, DONE, CANCELLED)",
     )
     deduction_breakdown: dict = Field(
         default_factory=dict,
@@ -196,11 +205,11 @@ class Order(SQLModel, table=True):
     )
     delivery_at: Optional[datetime] = Field(
         default=None,
-        description="RECEIPT delivery time (markup) - jam 15:00 WIB based on 15:00 WIB cutoff rule",
+        description="Receipt delivery time (markup) at 15:00 WIB based on the 15:00 WIB cutoff rule",
     )
     actual_delivery_at: Optional[datetime] = Field(
         default=None,
-        description="ACTUAL delivery time (order data) - real +7 days from order creation (WIB)",
+        description="Actual delivery time for order data, calculated as real plus 7 days from order creation (WIB)",
     )
     created_at: datetime = Field(
         default_factory=datetime.now,
@@ -223,7 +232,7 @@ class Order(SQLModel, table=True):
                 "buyer_name": "John Doe",
                 "item_name": "Starlight Card",
                 "total_diamond": 300,
-                "status": "COMPLETED",
+                "status": "DONE",
                 "deduction_breakdown": {
                     "Account_001": 100,
                     "Account_002": 100,
@@ -282,6 +291,75 @@ class OrderResponse(SQLModel):
     proof_video_link: Optional[str]
     delivery_at: Optional[datetime]
     actual_delivery_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
+class RestockQueue(SQLModel, table=True):
+    """Restock queue model for tracking inventory deficits that require supplier action."""
+
+    __tablename__ = "restock_queue"
+
+    id: Optional[str] = Field(
+        default_factory=lambda: str(uuid4()),
+        primary_key=True,
+        description="UUID for the restock queue entry",
+    )
+    account_id: int = Field(
+        foreign_key="accounts.id",
+        description="Account ID requiring restock",
+    )
+    order_id: str = Field(
+        foreign_key="orders.id",
+        description="Order ID that triggered this restock requirement",
+    )
+    deficit_diamond: int = Field(
+        ge=0,
+        description="Amount of diamonds required to resolve the deficit",
+    )
+    status: str = Field(
+        default="OPEN",
+        min_length=1,
+        max_length=50,
+        description="Restock queue status (OPEN, IN_PROGRESS, RESOLVED, CANCELLED)",
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now,
+        description="Queue creation timestamp (WIB local time, not UTC)",
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.now,
+        description="Last update timestamp (WIB local time, not UTC)",
+    )
+
+    class Config:
+        """SQLModel config."""
+
+        json_schema_extra = {
+            "example": {
+                "account_id": 1,
+                "order_id": "b1cc5b92-3d8e-4c76-b3f1-f16c57b1ab2a",
+                "deficit_diamond": 140,
+                "status": "OPEN",
+            }
+        }
+
+
+class RestockQueueUpdate(SQLModel):
+    """Schema for updating a restock queue entry."""
+
+    deficit_diamond: Optional[int] = Field(None, ge=0)
+    status: Optional[str] = Field(None, min_length=1, max_length=50)
+
+
+class RestockQueueResponse(SQLModel):
+    """Schema for restock queue API responses."""
+
+    id: str
+    account_id: int
+    order_id: str
+    deficit_diamond: int
+    status: str
     created_at: datetime
     updated_at: datetime
 

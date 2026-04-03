@@ -4,7 +4,44 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.core.models import Account, Order
+from app.core.models import Account, Order, RestockQueue
+
+
+async def evaluate_order_readiness(session: AsyncSession, order_id: str) -> None:
+    """Reconcile order status from active restock queues and the friend-delay time gate."""
+
+    stmt = select(Order).where(Order.id == order_id)
+    result = await session.execute(stmt)
+    order = result.scalars().first()
+
+    if not order or order.status in ["DONE", "CANCELLED"]:
+        return
+
+    queue_stmt = select(RestockQueue.id).where(
+        RestockQueue.order_id == order_id,
+        RestockQueue.status.in_(["OPEN", "IN_PROGRESS"]),
+    )
+    queue_result = await session.execute(queue_stmt)
+    has_active_queue = queue_result.first() is not None
+
+    if has_active_queue:
+        target_status = "AWAITING_RESTOCK"
+    else:
+        now = datetime.now()
+        delivery_gate = order.actual_delivery_at
+        target_status = (
+            "READY_TO_GIFT"
+            if delivery_gate is not None and now >= delivery_gate
+            else "FRIEND_DELAY_ACTIVE"
+        )
+
+    if order.status == target_status:
+        return
+
+    order.status = target_status
+    order.updated_at = datetime.now()
+    session.add(order)
+    await session.commit()
 
 
 def calculate_receipt_delivery_at(created_at: datetime) -> datetime:
@@ -133,19 +170,10 @@ async def create_combo_order(
 ) -> Order:
     """
     Create a combo order with Equal Distribution algorithm.
-    
-    This is for INTERNAL MANUAL GIFT orders - NOT connected to Digiflazz.
-    Stock is reserved (deducted) immediately upon order creation.
 
-    Logic (Equal Distribution):
-    1. Fetch accounts by selected_account_ids
-    2. Check total stock_diamond >= total_diamond (raise ValueError if not)
-    3. base_deduction = total_diamond // number_of_accounts
-    4. remainder = total_diamond % number_of_accounts
-    5. Iterate: deduct base_deduction from each account, distribute remainder +1 per account
-    6. Record deduction_breakdown as JSON
-    7. Calculate delivery_at based on 15:00 WIB cutoff
-    8. Create Order with status="PENDING" and commit (ACID)
+    This is for internal manual gift orders and does not call Digiflazz.
+    Real stock is reserved immediately. Any shortfall is recorded as account
+    deficit and linked to new restock queue entries.
 
     Args:
         session: AsyncSession for database operations
@@ -161,7 +189,7 @@ async def create_combo_order(
         Created Order object with delivery_at calculated
 
     Raises:
-        ValueError: If accounts not found or insufficient stock
+        ValueError: If accounts are not found or inactive
     """
 
     # Use provided created_at (from client) or fallback to server time
@@ -196,55 +224,44 @@ async def create_combo_order(
     base_deduction = total_diamond // num_accounts
     remainder = total_diamond % num_accounts
 
-    # Prepare deduction breakdown
+    # Track real reservations separately from supplier-backed deficits.
     deduction_breakdown: dict[str, int] = {}
-    accounts_to_deduct = list(accounts)  # Make a copy for iteration
-
-    # Apply base deduction to all accounts
-    for account in accounts_to_deduct:
-        deduction_breakdown[account.name] = base_deduction
-        account.stock_diamond -= base_deduction
-
-    # Distribute remainder (+1 per account until remainder is 0)
-    remainder_index = 0
-    while remainder > 0:
-        if remainder_index >= len(accounts_to_deduct):
-            remainder_index = 0
-
-        account = accounts_to_deduct[remainder_index]
-        deduction_breakdown[account.name] += 1
-        account.stock_diamond -= 1
-        remainder -= 1
-        remainder_index += 1
-
-    # Add updated accounts to session (stock reservation)
-    for account in accounts_to_deduct:
-        session.add(account)
-
-    # Prepare sending_accounts with account details
     sending_accounts: dict[str, dict] = {}
-    for account in accounts_to_deduct:
+    restock_requirements: list[tuple[int, int]] = []
+
+    for index, account in enumerate(accounts):
+        required_deduction = base_deduction + (1 if index < remainder else 0)
+        reserved_deduction = min(account.stock_diamond, required_deduction)
+        deficit_deduction = required_deduction - reserved_deduction
+
+        if reserved_deduction > 0:
+            account.stock_diamond -= reserved_deduction
+
+        if deficit_deduction > 0:
+            account.deficit_diamond += deficit_deduction
+            restock_requirements.append((account.id, deficit_deduction))
+
+        deduction_breakdown[account.name] = reserved_deduction
         sending_accounts[str(account.id)] = {
             "name": account.name,
             "game_id": account.game_id,
             "zone": account.zone,
-            "deduction": deduction_breakdown[account.name],
+            "deduction": required_deduction,
+            "reserved_deduction": reserved_deduction,
+            "deficit_deduction": deficit_deduction,
         }
 
-    # Calculate delivery_at for RECEIPT/STRUK (markup time dengan jam 15:00 WIB)
-    # Fungsi ini untuk catatan pembeli dan prevent komplain
-    delivery_at = calculate_receipt_delivery_at(created_at)
-    
-    # Calculate actual_delivery_at for ORDER DATA (real +7 days from order creation)
-    # This is the actual delivery time shown on Orders page
-    actual_delivery_at = calculate_order_delivery_at(created_at)
-    
-    # NOTE: 
-    # - delivery_at = Receipt/Struk time (markup dengan jam 15:00)
-    # - actual_delivery_at = Order real time (+7 hari dari order creation)
+        session.add(account)
 
-    # Create Order record with PENDING status (manual gift, no Digiflazz)
-    # IMPORTANT: Set created_at explicitly to preserve WIB time (not use default utcnow)
+    # Calculate delivery timestamps.
+    delivery_at = calculate_receipt_delivery_at(created_at)
+    actual_delivery_at = calculate_order_delivery_at(created_at)
+
+    order_status = (
+        "AWAITING_RESTOCK" if restock_requirements else "WAITING_FRIEND_ADD"
+    )
+
+    # Create the order first so deficit queues can link to the new order ID.
     order = Order(
         invoice_ref=invoice_ref,
         target_id=target_id,
@@ -253,18 +270,30 @@ async def create_combo_order(
         buyer_name=buyer_name,
         item_name=item_name,
         quantity=quantity,
-        status="PENDING",
+        status=order_status,
         deduction_breakdown=deduction_breakdown,
         sending_accounts=sending_accounts,
-        delivery_at=delivery_at,  # Receipt/Struk time (jam 15:00)
-        actual_delivery_at=actual_delivery_at,  # Order real time (+7 hari)
-        created_at=created_at,  # Explicitly set to when order was created (WIB)
-        updated_at=created_at,  # Same as created_at at order creation time
+        delivery_at=delivery_at,
+        actual_delivery_at=actual_delivery_at,
+        created_at=created_at,
+        updated_at=created_at,
     )
     session.add(order)
+    await session.flush()
+
+    for account_id, deficit_amount in restock_requirements:
+        session.add(
+            RestockQueue(
+                account_id=account_id,
+                order_id=order.id,
+                deficit_diamond=deficit_amount,
+                status="OPEN",
+                created_at=created_at,
+                updated_at=created_at,
+            )
+        )
 
     # Commit transaction (ACID compliant)
-    # Stock is reserved at this point
     await session.commit()
     await session.refresh(order)
 

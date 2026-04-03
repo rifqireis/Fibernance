@@ -25,6 +25,7 @@ def account_to_response(account: Account) -> AccountResponse:
         zone=account.zone,
         server_id=account.server_id,
         stock_diamond=account.stock_diamond,
+        deficit_diamond=account.deficit_diamond,
         pending_wdp=account.pending_wdp,
         is_active=account.is_active,
         created_at=account.created_at,

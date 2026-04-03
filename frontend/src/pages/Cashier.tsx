@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAccounts } from '../api/accounts';
+import { useAccounts, type Account } from '../api/accounts';
 import { useCreateComboOrder } from '../api/orders';
 import { useCashierStore } from '../store/cashierStore';
 import { Badge, Button, Card, Input, Textarea, cn } from '../components/ui';
@@ -22,6 +22,8 @@ const getParserBadgeVariant = (type: 'idle' | 'success' | 'error' | 'partial') =
 
   return 'neutral' as const;
 };
+
+type AccountCategoryKey = 'cukup' | 'minus';
 
 const Cashier: React.FC = () => {
   const [parserText, setParserText] = useState('');
@@ -59,7 +61,7 @@ const Cashier: React.FC = () => {
     selectedAccounts.forEach((id) => {
       const account = accounts.find((acc) => String(acc.id) === id);
       if (account) {
-        balance[id] = Math.max(0, account.stock_diamond - totalDiamond);
+        balance[id] = Math.max(0, account.real_diamond - totalDiamond);
       }
     });
     return balance;
@@ -98,7 +100,6 @@ const Cashier: React.FC = () => {
       setTotalDiamond(300 * quantity);
     }
   };
-
   // Auto-calculate totalDiamond when quantity changes for Starlight items
   useEffect(() => {
     if (itemName.toLowerCase().includes('starlight')) {
@@ -128,7 +129,7 @@ const Cashier: React.FC = () => {
     let parsedUsername = '';
     let parsedPurchaserName = '';
 
-    // 0. Order ID: "OD000000154383657" (setelah "Nomor Pesanan")
+    // 0. Order ID: "OD000000154383657" (after "Nomor Pesanan")
     const orderIdMatch = rawText.match(/Nomor Pesanan[\s\n:]*([A-Z0-9]+)/i);
     if (orderIdMatch && orderIdMatch[1]) {
       parsedOrderId = orderIdMatch[1].trim();
@@ -139,13 +140,12 @@ const Cashier: React.FC = () => {
       console.warn('Order ID was not found in the parser input.');
     }
 
-    // 1. Item Name: "Starlight Card" (sebelum "Lihat Dagangan")
+    // 1. Item name: text before "Lihat Dagangan"
     const itemNameMatch = rawText.match(/([^\n]+)\s*\nLihat Dagangan/i);
     if (itemNameMatch && itemNameMatch[1]) {
       parsedItemName = itemNameMatch[1].trim();
       successCount++;
       console.log('Parsed item name:', parsedItemName);
-      // Auto-calc Starlight with quantity
       if (parsedItemName.toLowerCase().includes('starlight')) {
         setTotalDiamond(300 * quantity);
       }
@@ -154,7 +154,7 @@ const Cashier: React.FC = () => {
       console.warn('Item name was not found in the parser input.');
     }
 
-    // 2. User ID (Target ID): Setelah "User ID" + newline/spaces + digits
+    // 2. User ID (target ID): after "User ID"
     const userIdMatch = rawText.match(/User\s+ID[\s\n]+(\d+)/i);
     if (userIdMatch && userIdMatch[1]) {
       parsedUserId = userIdMatch[1].trim();
@@ -165,7 +165,7 @@ const Cashier: React.FC = () => {
       console.warn('User ID was not found in the parser input.');
     }
 
-    // 3. Zone ID: Setelah "Zone ID" baris baru
+    // 3. Zone ID: after "Zone ID"
     const zoneIdMatch = rawText.match(/Zone\s+ID[\s\n]+(\d+)/i);
     if (zoneIdMatch && zoneIdMatch[1]) {
       parsedZoneId = zoneIdMatch[1].trim();
@@ -176,7 +176,7 @@ const Cashier: React.FC = () => {
       console.warn('Zone ID was not found in the parser input.');
     }
 
-    // 4. Username: Setelah "Username" baris baru
+    // 4. Username: after "Username"
     const usernameMatch = rawText.match(/Username[\s\n]+([^\n]+)/i);
     if (usernameMatch && usernameMatch[1]) {
       parsedUsername = usernameMatch[1].trim();
@@ -187,7 +187,7 @@ const Cashier: React.FC = () => {
       console.warn('Username was not found in the parser input.');
     }
 
-    // 5. Nama Pembeli: Setelah "Pembeli:" newline/spaces
+    // 5. Purchaser name: after "Pembeli"
     const purchaserMatch = rawText.match(/Pembeli[\s\n:]+([^\n]+)/i);
     if (purchaserMatch && purchaserMatch[1]) {
       parsedPurchaserName = purchaserMatch[1].trim();
@@ -627,26 +627,16 @@ const Cashier: React.FC = () => {
 };
 
 interface AccountCheckboxItemProps {
-  account: {
-    id: number;
-    name: string;
-    game_id: string;
-    zone: string;
-    server_id: string;
-    stock_diamond: number;
-    real_diamond: number;
-    potential_diamond: number;
-    is_active: boolean;
-  };
+  account: Account;
   isSelected: boolean;
   remainingBalance?: number;
-  category?: 'cukup' | 'cukup-potensial' | 'minus';
+  category?: AccountCategoryKey;
   totalDiamond?: number;
   onToggle: () => void;
 }
 
 interface AccountListByCategoryProps {
-  accounts: any[];
+  accounts: Account[];
   selectedAccounts: string[];
   remainingBalance: { [key: string]: number };
   totalDiamond: number;
@@ -661,20 +651,17 @@ const AccountListByCategory: React.FC<AccountListByCategoryProps> = ({
   onToggle,
 }) => {
   // Categorize accounts
-  const enough = accounts.filter(
+  const sufficientStock = accounts.filter(
     (acc) => acc.real_diamond >= totalDiamond
   );
-  const potentialCoverage = accounts.filter(
-    (acc) => acc.real_diamond < totalDiamond && acc.potential_diamond >= totalDiamond
-  );
-  const shortfall = accounts.filter(
-    (acc) => acc.potential_diamond < totalDiamond
+  const requiresRestock = accounts.filter(
+    (acc) => acc.real_diamond < totalDiamond
   );
 
   const renderCategory = (
     title: string,
-    accountList: any[],
-    categoryKey: 'cukup' | 'cukup-potensial' | 'minus'
+    accountList: Account[],
+    categoryKey: AccountCategoryKey
   ) => {
     if (accountList.length === 0) return null;
 
@@ -710,9 +697,8 @@ const AccountListByCategory: React.FC<AccountListByCategoryProps> = ({
 
   return (
     <div>
-      {renderCategory('Enough', enough, 'cukup')}
-      {renderCategory('Potential Coverage', potentialCoverage, 'cukup-potensial')}
-      {renderCategory('Shortfall', shortfall, 'minus')}
+      {renderCategory('Sufficient Stock', sufficientStock, 'cukup')}
+      {renderCategory('Requires Restock', requiresRestock, 'minus')}
     </div>
   );
 };
@@ -725,15 +711,17 @@ const AccountCheckboxItem: React.FC<AccountCheckboxItemProps> = ({
   totalDiamond,
   onToggle,
 }) => {
+  const projectedDeficit = totalDiamond
+    ? Math.max(0, totalDiamond - account.real_diamond)
+    : 0;
+
   return (
     <Card
       onClick={onToggle}
       className={cn('flex cursor-pointer items-start gap-4 border-gray-300 p-4 transition-colors',
         category === 'cukup'
           ? 'bg-white hover:bg-gray-50'
-          : category === 'cukup-potensial'
-          ? 'bg-gray-50 hover:bg-gray-100'
-          : 'bg-white hover:bg-gray-50')}
+          : 'bg-gray-50 hover:bg-gray-100')}
     >
       {/* Custom Checkbox */}
       <div
@@ -771,16 +759,25 @@ const AccountCheckboxItem: React.FC<AccountCheckboxItemProps> = ({
             </p>
             <span className="text-xs text-gray-500 font-sans">current</span>
           </div>
-          {category === 'cukup-potensial' && totalDiamond && (
+
+          {category === 'minus' && projectedDeficit > 0 && (
             <div className="flex items-center gap-3">
-              <p className="text-sm font-serif font-semibold text-gray-700">
-                {account.potential_diamond.toLocaleString()}
+              <p className="text-sm font-serif font-semibold text-gray-800">
+                {projectedDeficit.toLocaleString()}
               </p>
-              <span className="text-xs text-gray-500 font-sans">
-                potential ({(account.potential_diamond - account.real_diamond).toLocaleString()} more)
-              </span>
+              <span className="text-xs text-gray-500 font-sans">projected deficit</span>
             </div>
           )}
+
+          {account.deficit_diamond > 0 && (
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-serif font-semibold text-gray-800">
+                {account.deficit_diamond.toLocaleString()}
+              </p>
+              <span className="text-xs text-gray-500 font-sans">current deficit</span>
+            </div>
+          )}
+
           {isSelected && remainingBalance !== undefined && (
             <div className="flex items-center gap-3">
               <p

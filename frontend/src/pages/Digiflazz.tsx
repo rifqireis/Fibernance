@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAccounts } from '../api/accounts';
+import { usePurchaseQueue, type PurchaseQueueItem } from '../api/digiflazz';
 import { Badge, Button, Card, Input, Select, cn } from '../components/ui';
 
 const SKU_PRODUCTS = [
@@ -42,6 +43,30 @@ const formatRupiah = (value: number | null | undefined): string => {
 const formatTimestamp = (value: string | undefined): string => {
   if (!value) return 'N/A';
   return new Date(value).toLocaleString('en-US');
+};
+
+const formatQueueAge = (value: string): string => {
+  const createdAt = new Date(value);
+  const diffMs = Date.now() - createdAt.getTime();
+
+  if (Number.isNaN(createdAt.getTime()) || diffMs < 0) {
+    return 'Waiting time unavailable';
+  }
+
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+
+  if (days > 0) {
+    return `Waiting ${days}d ${hours}h`;
+  }
+
+  if (totalHours > 0) {
+    return `Waiting ${totalHours}h`;
+  }
+
+  const minutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+  return `Waiting ${minutes}m`;
 };
 
 const calculateMargin = (cost: number | null, market: number | null): string => {
@@ -463,9 +488,89 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
   );
 };
 
+const PurchaseQueuePanel: React.FC<{
+  queueItems: PurchaseQueueItem[] | undefined;
+  isLoading: boolean;
+  error: Error | null;
+}> = ({ queueItems, isLoading, error }) => {
+  return (
+    <div>
+      <p className="section-label">Workflow</p>
+      <h2 className="mt-2 text-2xl font-serif font-semibold text-black">Purchase Queue</h2>
+      <p className="mt-2 text-sm text-gray-600">
+        Review active restock deficits emitted by Cashier before supply action is taken.
+      </p>
+
+      {isLoading ? (
+        <Card className="mt-8 border-gray-200 p-6">
+          <p className="text-sm text-gray-600">Loading active purchase queue entries.</p>
+        </Card>
+      ) : error ? (
+        <Card className="mt-8 border-red-200 bg-red-50 p-6">
+          <Badge variant="error">Queue Unavailable</Badge>
+          <p className="mt-4 text-sm font-semibold text-black">Failed to load purchase queue.</p>
+          <p className="mt-1 text-sm text-gray-700">{error.message}</p>
+        </Card>
+      ) : queueItems && queueItems.length > 0 ? (
+        <div className="mt-8 space-y-4">
+          {queueItems.map((item) => (
+            <Card key={item.id} className="border-gray-200 p-0">
+              <div className="border-b border-gray-200 px-6 py-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="section-label">Account</p>
+                    <h3 className="mt-2 text-lg font-serif font-semibold text-black">
+                      {item.account_name}
+                    </h3>
+                    <p className="mt-2 text-sm text-gray-600">Order {item.order_id}</p>
+                  </div>
+                  <Badge variant="neutral" className="w-fit px-2 py-1 tracking-normal">
+                    {item.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid gap-0 lg:grid-cols-2">
+                <div className="border-b border-gray-200 px-6 py-5 lg:border-b-0 lg:border-r">
+                  <p className="section-label">Deficit Amount</p>
+                  <p className="mt-2 text-xl font-serif font-semibold text-black">
+                    Needs {item.deficit_diamond.toLocaleString()} Diamonds
+                  </p>
+                </div>
+                <div className="px-6 py-5">
+                  <p className="section-label">Created</p>
+                  <p className="mt-2 text-sm font-semibold text-black">
+                    {formatTimestamp(item.created_at)}
+                  </p>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">
+                    {formatQueueAge(item.created_at)}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="mt-8 border-gray-200 bg-gray-50 p-6">
+          <Badge variant="neutral">Queue Clear</Badge>
+          <p className="mt-4 text-sm font-semibold text-black">No active restock queue entries.</p>
+          <p className="mt-1 text-sm text-gray-700">
+            New Cashier shortages will appear here after backend queue generation.
+          </p>
+        </Card>
+      )}
+    </div>
+  );
+};
+
 const Digiflazz: React.FC = () => {
   const { data: accounts, isLoading } = useAccounts();
-  const [activeTab, setActiveTab] = useState<'regular' | 'settlement'>('regular');
+  const {
+    data: purchaseQueue,
+    isLoading: queueLoading,
+    error: queueError,
+  } = usePurchaseQueue();
+  const [activeTab, setActiveTab] = useState<'regular' | 'settlement' | 'queue'>('regular');
   const [wdpPrices, setWdpPrices] = useState<WDPPrices | null>(null);
   const [wdpLoading, setWdpLoading] = useState(true);
   const [balance, setBalance] = useState<BalanceData | null>(null);
@@ -699,6 +804,19 @@ const Digiflazz: React.FC = () => {
           >
             Debt Settlement
           </Button>
+          <Button
+            type="button"
+            onClick={() => setActiveTab('queue')}
+            variant="ghost"
+            className={cn(
+              digiflazzTabButtonClass,
+              activeTab === 'queue'
+                ? 'border-black text-black hover:border-black hover:bg-transparent'
+                : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
+            )}
+          >
+            Purchase Queue
+          </Button>
         </div>
       </div>
 
@@ -706,8 +824,14 @@ const Digiflazz: React.FC = () => {
         <Card className="border-gray-200 p-6 lg:p-8">
           {activeTab === 'regular' ? (
             <TopupRegularForm accounts={accounts} isLoading={isLoading} />
-          ) : (
+          ) : activeTab === 'settlement' ? (
             <DebtSettlementForm accounts={accounts} isLoading={isLoading} />
+          ) : (
+            <PurchaseQueuePanel
+              queueItems={purchaseQueue}
+              isLoading={queueLoading}
+              error={queueError}
+            />
           )}
         </Card>
       </div>

@@ -1,5 +1,6 @@
 """Orders router for handling manual combo orders and stock management."""
 
+from datetime import datetime
 import logging
 from uuid import uuid4
 
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.database import get_session
-from app.core.models import Account, Order, OrderResponse
+from app.core.models import Account, Order, OrderResponse, RestockQueue
 from app.services.order_service import create_combo_order
 from app.services.telegram_service import upload_video_to_telegram
 from pydantic import BaseModel, Field
@@ -332,7 +333,8 @@ async def _process_refund(session: AsyncSession, order: Order) -> None:
     """
     Process refund for a cancelled order.
 
-    Reads deduction_breakdown and adds back diamonds to source accounts.
+    Reads deduction_breakdown and adds back real diamonds to source accounts.
+    Also reverses any active restock queue deficits linked to the order.
 
     Args:
         session: AsyncSession for database access
@@ -363,6 +365,39 @@ async def _process_refund(session: AsyncSession, order: Order) -> None:
             logger.info(
                 f"💰 Refund: +{deduction_amount} diamonds to '{account_name}' (order {order.invoice_ref})"
             )
+
+        queue_stmt = select(RestockQueue).where(
+            RestockQueue.order_id == order.id,
+            RestockQueue.status.in_(["OPEN", "IN_PROGRESS"]),
+        )
+        queue_result = await session.execute(queue_stmt)
+        queue_entries = queue_result.scalars().all()
+
+        for queue_entry in queue_entries:
+            account_stmt = select(Account).where(Account.id == queue_entry.account_id)
+            account_result = await session.execute(account_stmt)
+            account = account_result.scalars().first()
+
+            if not account:
+                logger.warning(
+                    f"Account ID {queue_entry.account_id} not found for restock reversal "
+                    f"(order {order.invoice_ref}, queue {queue_entry.id})"
+                )
+            else:
+                account.deficit_diamond = max(
+                    0,
+                    account.deficit_diamond - queue_entry.deficit_diamond,
+                )
+                session.add(account)
+
+                logger.info(
+                    f"↩️ Restock reversal: -{queue_entry.deficit_diamond} deficit from "
+                    f"'{account.name}' (order {order.invoice_ref}, queue {queue_entry.id})"
+                )
+
+            queue_entry.status = "CANCELLED"
+            queue_entry.updated_at = datetime.now()
+            session.add(queue_entry)
 
         logger.info(f"✅ Refund completed for order {order.invoice_ref}")
 

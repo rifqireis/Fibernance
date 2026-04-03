@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.database import get_session
-from app.core.models import Account, TopupHistory, TopupHistoryResponse, CostPrice, CostPriceUpdate, CostPriceResponse
+from app.core.models import Account, TopupHistory, TopupHistoryResponse, CostPrice, CostPriceUpdate, CostPriceResponse, RestockQueue
 from app.services.digiflazz_service import DigiflazzService
 from pydantic import BaseModel, Field
 
@@ -70,6 +70,19 @@ class WDPModalResponse(BaseModel):
     timestamp: str = ""
     from_cache: bool = False
     error: str | None = None
+
+
+class PurchaseQueueResponse(BaseModel):
+    """Response schema for active purchase queue entries."""
+
+    id: str
+    account_id: int
+    account_name: str
+    order_id: str
+    deficit_diamond: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @router.get("/wdp-cheapest", response_model=WDPCheapestResponse)
@@ -325,6 +338,44 @@ async def get_balance() -> DigSaldoResponse:
         raise HTTPException(
             status_code=500, detail=f"Failed to check balance: {str(e)}"
         )
+
+
+@router.get("/queue", response_model=list[PurchaseQueueResponse])
+async def get_purchase_queue(
+    session: AsyncSession = Depends(get_session),
+) -> list[PurchaseQueueResponse]:
+    """Return active purchase queue entries for inventory deficits requiring supply action."""
+
+    try:
+        stmt = (
+            select(RestockQueue, Account.name)
+            .join(Account, RestockQueue.account_id == Account.id)
+            .where(RestockQueue.status.in_(["OPEN", "IN_PROGRESS"]))
+            .order_by(RestockQueue.created_at.asc(), RestockQueue.id.asc())
+        )
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        queue_entries = [
+            PurchaseQueueResponse(
+                id=queue.id,
+                account_id=queue.account_id,
+                account_name=account_name,
+                order_id=queue.order_id,
+                deficit_diamond=queue.deficit_diamond,
+                status=queue.status,
+                created_at=queue.created_at,
+                updated_at=queue.updated_at,
+            )
+            for queue, account_name in rows
+        ]
+
+        logger.info(f"✅ Retrieved {len(queue_entries)} active purchase queue entries")
+        return queue_entries
+
+    except Exception as e:
+        logger.error(f"❌ Error retrieving purchase queue: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve purchase queue: {str(e)}")
 
 
 @router.get("/history")

@@ -1,9 +1,15 @@
 """Account service business logic."""
 
+from datetime import datetime
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.core.models import Account
+from app.core.models import Account, RestockQueue
+from app.services.order_service import evaluate_order_readiness
+
+logger = logging.getLogger(__name__)
 
 # Constants
 WDP_TO_DIAMOND_RATIO = 100  # 1 WDP = 100 Diamond
@@ -122,6 +128,63 @@ def classify_account(account: Account) -> str:
 # ============================================================================
 
 
+async def _apply_deficit_payment(
+    session: AsyncSession,
+    account: Account,
+    available_diamonds: int,
+) -> tuple[int, set[str]]:
+    """Apply incoming diamonds to account deficits and resolve active restock queues."""
+
+    if available_diamonds <= 0 or account.deficit_diamond <= 0:
+        return available_diamonds, set()
+
+    deficit_payment = min(available_diamonds, account.deficit_diamond)
+    account.deficit_diamond = max(0, account.deficit_diamond - deficit_payment)
+    available_diamonds -= deficit_payment
+
+    remaining_queue_payment = deficit_payment
+    resolved_order_ids: set[str] = set()
+    stmt = (
+        select(RestockQueue)
+        .where(
+            RestockQueue.account_id == account.id,
+            RestockQueue.status.in_(["OPEN", "IN_PROGRESS"]),
+        )
+        .order_by(RestockQueue.created_at, RestockQueue.id)
+    )
+    result = await session.execute(stmt)
+    open_queues = result.scalars().all()
+    resolution_time = datetime.now()
+
+    for queue in open_queues:
+        if remaining_queue_payment <= 0:
+            break
+
+        queue_payment = min(queue.deficit_diamond, remaining_queue_payment)
+        queue.deficit_diamond -= queue_payment
+        remaining_queue_payment -= queue_payment
+        queue.updated_at = resolution_time
+
+        if queue.deficit_diamond == 0:
+            queue.status = "RESOLVED"
+            resolved_order_ids.add(queue.order_id)
+
+        session.add(queue)
+
+    return available_diamonds, resolved_order_ids
+
+
+def _apply_pending_wdp_legacy_settlement(account: Account, available_diamonds: int) -> int:
+    """Apply remaining diamond value to legacy pending WDP after deficit settlement."""
+
+    if available_diamonds <= 0 or account.pending_wdp <= 0:
+        return available_diamonds
+
+    debt_payment = min(available_diamonds, account.pending_wdp)
+    account.pending_wdp = max(0, account.pending_wdp - debt_payment)
+    return available_diamonds - debt_payment
+
+
 async def apply_topup_success(
     session: AsyncSession,
     account_id: int,
@@ -129,15 +192,13 @@ async def apply_topup_success(
     received_wdp_days: int = 0,
 ) -> Account:
     """
-    Apply successful topup to account using Debt-First Allocation strategy.
+    Apply successful topup to an account using deficit-first allocation.
 
-    Logic (Debt-First):
-    1. If received_wdp_days > 0:
-       - Use WDP to pay pending_wdp (debt) first
-       - remaining_wdp = received_wdp_days - pending_wdp
-       - If remaining_wdp > 0, convert to diamonds (1 WDP = 100 Diamond)
-    2. Add received_diamonds to stock_diamond
-    3. Save with transaction (ACID compliant)
+    Logic:
+    1. Preserve the legacy pending_wdp bookkeeping for WDP-based topups.
+    2. Apply any real diamond value to deficit_diamond first.
+    3. Resolve the oldest open restock queues for the account.
+    4. Add any remaining diamonds to stock_diamond.
 
     Args:
         session: AsyncSession for database operations
@@ -169,22 +230,24 @@ async def apply_topup_success(
     if not account.is_active:
         raise ValueError(f"Account {account.name} is not active")
 
-    # Debt-First Allocation Logic
+    available_diamonds = received_diamonds
+
+    # Preserve the existing WDP bookkeeping flow for compatibility.
     if received_wdp_days > 0:
-        # Calculate debt payment and remaining WDP
         debt_payment = min(received_wdp_days, account.pending_wdp)
         remaining_wdp = received_wdp_days - debt_payment
 
-        # Update pending_wdp
         account.pending_wdp = max(0, account.pending_wdp - debt_payment)
 
-        # Convert remaining WDP to diamonds
         if remaining_wdp > 0:
-            converted_diamonds = remaining_wdp * WDP_TO_DIAMOND_RATIO
-            account.stock_diamond += converted_diamonds
+            available_diamonds += remaining_wdp * WDP_TO_DIAMOND_RATIO
 
-    # Add received diamonds
-    account.stock_diamond += received_diamonds
+    available_diamonds, resolved_order_ids = await _apply_deficit_payment(
+        session=session,
+        account=account,
+        available_diamonds=available_diamonds,
+    )
+    account.stock_diamond += available_diamonds
 
     # Mark as modified
     session.add(account)
@@ -192,6 +255,19 @@ async def apply_topup_success(
     # Commit transaction (ACID compliant)
     await session.commit()
     await session.refresh(account)
+
+    for resolved_order_id in sorted(resolved_order_ids):
+        try:
+            await evaluate_order_readiness(session, resolved_order_id)
+        except Exception as exc:
+            logger.error(
+                "Failed to reconcile order readiness for %s after topup success: %s",
+                resolved_order_id,
+                exc,
+            )
+
+    if resolved_order_ids:
+        await session.refresh(account)
 
     return account
 
@@ -203,16 +279,20 @@ async def apply_digiflazz_success(
     topup_type: str = "REGULAR",
 ) -> Account:
     """
-    Apply successful Digiflazz topup to account with SKU-based logic.
+        Apply successful Digiflazz topup to an account with deficit-first logic.
 
     Logic:
     - Resolves SKU to instant diamonds and total value using SKU_MAP
     - If type is LUNASI (Settlement):
-      * Reduce pending_wdp (debt) by total_value of SKU
-      * If total_value > pending_wdp, add remainder to stock_diamond
+            * Use the total value to reduce deficit_diamond first
+            * Resolve the oldest open restock queues for that account
+            * Apply any remaining value to legacy pending_wdp
+            * Add the final remainder to stock_diamond
     - If type is REGULAR (Normal topup):
-      * Add instant diamonds from SKU directly to stock_diamond
-      * Note: WDP claim period (days) is tracked separately by Digiflazz API
+            * Apply instant diamonds to deficit_diamond first
+            * Resolve the oldest open restock queues for that account
+            * Add any remaining instant diamonds to stock_diamond
+            * Keep the legacy pending_wdp increment for WDP-style SKUs
 
     Args:
         session: AsyncSession for database operations
@@ -252,24 +332,26 @@ async def apply_digiflazz_success(
 
     # Apply type-specific logic
     if topup_type == "LUNASI":
-        # LUNASI (Settlement): Use total_value to reduce debt
-        # total_value = instant + (days * 20)
-        # E.g., WDP_BR: 80 + (7*20) = 220
-        debt_payment = min(total_value, account.pending_wdp)
-        remaining_diamonds = total_value - debt_payment
-
-        # Reduce debt
-        account.pending_wdp = max(0, account.pending_wdp - debt_payment)
-
-        # Add remaining diamonds to stock
+        remaining_diamonds, resolved_order_ids = await _apply_deficit_payment(
+            session=session,
+            account=account,
+            available_diamonds=total_value,
+        )
+        remaining_diamonds = _apply_pending_wdp_legacy_settlement(
+            account=account,
+            available_diamonds=remaining_diamonds,
+        )
         account.stock_diamond += remaining_diamonds
 
     else:
-        # REGULAR or BULK: Add instant diamonds to stock
-        account.stock_diamond += instant_diamonds
-        
-        # JIKA PRODUK MEMILIKI WDP DAYS (Misal WDP_BR memiliki 7 hari), 
-        # Tambahkan hari tersebut sebagai hutang yang harus diklaim harian (1 hari = 100 diamond representation)
+        remaining_diamonds, resolved_order_ids = await _apply_deficit_payment(
+            session=session,
+            account=account,
+            available_diamonds=instant_diamonds,
+        )
+        account.stock_diamond += remaining_diamonds
+
+        # Preserve the legacy WDP bookkeeping for compatibility.
         if sku_data["days"] > 0:
             account.pending_wdp += (sku_data["days"] * 100)
 
@@ -279,5 +361,18 @@ async def apply_digiflazz_success(
     # Commit transaction (ACID compliant)
     await session.commit()
     await session.refresh(account)
+
+    for resolved_order_id in sorted(resolved_order_ids):
+        try:
+            await evaluate_order_readiness(session, resolved_order_id)
+        except Exception as exc:
+            logger.error(
+                "Failed to reconcile order readiness for %s after Digiflazz success: %s",
+                resolved_order_id,
+                exc,
+            )
+
+    if resolved_order_ids:
+        await session.refresh(account)
 
     return account

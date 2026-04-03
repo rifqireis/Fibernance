@@ -69,3 +69,48 @@ Intent:
 - added reusable `RadioCardGroup` and `FileTrigger` primitives under `frontend/src/components/ui/` for operational choice grids and file upload triggers
 - refactored `frontend/src/pages/DataSync.tsx` export/import scope selectors and JSON file picker to use the shared primitives without changing backup, preview, or confirm-import behavior
 - refactored the video upload picker in `frontend/src/pages/Orders.tsx` to use the shared file trigger primitive while preserving upload validation and Telegram delivery flow
+
+### Supply chain architecture standard
+
+- added `docs/architecture/SUPPLY_CHAIN_WORKFLOW.md` to define Inventory as the strict Single Source of Truth between Sales and Digiflazz
+- documented the Manual WDP Boost or Temporary Minus workaround as technical debt and formalized its replacement with explicit deficit tracking and a restock queue
+- defined the target order-state refinement for supply-aware delivery readiness: `WAITING_FRIEND_ADD`, `FRIEND_DELAY_ACTIVE`, `AWAITING_RESTOCK`, and `READY_TO_GIFT`
+
+### Phase 1 backend model update
+
+- added `deficit_diamond` to the account model and account schemas to represent explicit inventory shortage without corrupting real stock
+- introduced the `RestockQueue` model as the additive linkage between order deficits and future supplier action
+- updated order status documentation in the model layer to support the phased transition toward the new pre-delivery state machine while keeping `PENDING` as the default for rollout safety
+
+### Phase 2 backend logic update
+
+- updated `backend/app/services/order_service.py` so combo orders reserve only real stock, record any shortfall into `deficit_diamond`, and create `RestockQueue` rows instead of allowing negative inventory
+- updated `backend/app/services/account_service.py` so successful supplier value clears explicit deficits and resolves the oldest open queue entries before any remainder reaches stock
+- preserved legacy `pending_wdp` bookkeeping for rollout compatibility while shifting operational priority to explicit deficit and queue handling
+- updated `backend/app/routers/orders.py` cancellation flow so order refunds also reverse linked open restock queue deficits and mark those queue entries as cancelled within the same transaction
+
+### Phase 3 cashier SSOT update
+
+- updated `frontend/src/api/accounts.ts` and `frontend/src/pages/Cashier.tsx` so the Cashier workflow reads real stock and explicit deficits instead of fake WDP forecasting
+- replaced the old potential-based account grouping with `Sufficient Stock` and `Requires Restock`, and surfaced projected deficit plus current deficit directly in account cards
+- kept order processing available for restock-required selections so the backend can create `RestockQueue` entries under the new SSOT workflow
+
+### Phase 4 Digiflazz queue visibility
+
+- added an active purchase queue endpoint in `backend/app/routers/digiflazz.py` so Digiflazz can read open or in-progress restock demand together with account names
+- added `frontend/src/api/digiflazz.ts` and a `Purchase Queue` tab in `frontend/src/pages/Digiflazz.tsx` to surface live restock deficits emitted by Cashier
+- completed the visibility bridge between Cashier deficit creation and Digiflazz supply monitoring without adding any new operator actions yet
+
+### Automatic readiness reconciliation
+
+- added a backend reconciliation loop so successful queue resolution now reevaluates affected orders and promotes them from `AWAITING_RESTOCK` to `FRIEND_DELAY_ACTIVE` or `READY_TO_GIFT` automatically when supplier deficits clear
+
+- created `docs/development/SUPPLY_CHAIN_IMPLEMENTATION_V1.md` to document the low-level mechanics of the five-phase supply chain refactor separately from the high-level architecture standard
+
+- fixed the backend accounts response mapping in `backend/app/routers/accounts.py` so Inventory and Cashier can fetch account data correctly after the `deficit_diamond` schema addition
+
+- added a lightweight startup schema sync in `backend/app/core/database.py` so existing SQLite databases automatically receive additive columns required by the new account-fetch flow
+
+- hardened the startup schema sync into an additive patch registry and documented the rollout rule in `docs/development/SUPPLY_CHAIN_IMPLEMENTATION_V1.md` so future additive columns can be introduced without repeating the same runtime break
+
+- smoke-checked Inventory and Cashier account fetching end to end: backend `GET /api/accounts` returned `200 OK`, and both UI routes triggered successful account-fetch requests after the schema-sync fix
