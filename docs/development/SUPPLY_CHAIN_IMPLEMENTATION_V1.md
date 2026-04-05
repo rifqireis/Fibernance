@@ -86,6 +86,26 @@ The UI now shows:
 
 This allows order creation to proceed without faking inventory.
 
+### Inventory page semantics
+
+The Inventory frontend in `frontend/src/pages/Inventory.tsx` now treats WDP as read-only bookkeeping.
+
+Operational rules:
+
+- `pending_wdp` is displayed for visibility, but it is no longer manually edited from the Inventory account modals
+- new accounts are created with `pending_wdp = 0` unless actual supplier flows add purchased WDP later
+- Inventory surfaces `deficit_diamond` alongside stock and forecast so operators can see the real shortage signal
+- the forecast column is informational only; it does not change Cashier eligibility
+
+Display rules:
+
+- `potential_diamond` is shown as a forecast total, not as real usable stock
+- the UI explains the forecast contribution as `wdp_potential_capped`
+- tracked WDP is rendered as stored units with an approximate day equivalent so operators do not confuse legacy storage units with real calendar state
+- the approximate day equivalent is exposed by the backend account response as a computed field so Inventory and Digiflazz do not each reimplement the conversion locally
+
+This keeps Inventory aligned with the architecture rule that real stock and explicit shortages are authoritative, while legacy WDP data remains visible for compatibility.
+
 ### Order creation behavior
 
 Order creation is handled in `backend/app/services/order_service.py` by `create_combo_order`.
@@ -123,6 +143,24 @@ The Digiflazz frontend in `frontend/src/pages/Digiflazz.tsx` consumes that endpo
 
 This tab gives operations a clean list of current supply obligations without exposing customer-facing Itemku workflow logic.
 
+### Operator action surfaces
+
+The Digiflazz frontend now exposes two submission paths backed by `POST /api/digiflazz/topup`:
+
+- `Regular Top-up`: submits supplier requests with type `REGULAR`
+- `Legacy WDP Settlement`: submits supplier requests with type `LUNASI`
+
+Behavioral rules:
+
+- `Regular Top-up` is the default workflow for live supply action
+- `Legacy WDP Settlement` is explicitly labeled as legacy and is only for actual purchased WDP state still tracked in `pending_wdp`
+- `Legacy WDP Settlement` must not be used to create fake forecast inventory or bypass the purchase queue
+- tracked WDP balances are shown in stored units plus a backend-provided approximate day equivalent for operator readability
+- backend top-up creation rejects `LUNASI` requests for accounts that do not currently carry tracked legacy `pending_wdp`
+- backend regression coverage now verifies this contract at the HTTP layer through `POST /api/digiflazz/topup`, including `REGULAR` success, lowercase type normalization, and `LUNASI` rejection without tracked legacy WDP
+
+This keeps the Digiflazz UI compatible with legacy bookkeeping without reintroducing Manual WDP Boost as an operational habit.
+
 ### Deficit-first supplier application
 
 Supplier success is processed in `backend/app/services/account_service.py`.
@@ -148,6 +186,40 @@ Legacy compatibility:
 - explicit deficit handling now has higher operational priority than WDP bookkeeping
 
 This keeps supplier value aligned to real shortages first.
+
+### WDP Constants & Storage Semantics
+
+The WDP system uses the following constants in `backend/app/services/account_service.py`:
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `WDP_TO_DIAMOND_RATIO` | 100 | Storage ratio: 100 `pending_wdp` units per WDP day |
+| `WDP_POTENTIAL_PER_DAY` | 20 | Conservative forecast: each WDP day = 20 potential diamonds |
+| `WDP_POTENTIAL_CAP` | 140 | Maximum potential contribution from WDP (7 days × 20) |
+
+**Critical distinction — `WDP_TO_DIAMOND_RATIO` is NOT the total diamond value of a WDP pass.**
+
+A single Weekly Diamond Pass delivers:
+
+- 80 instant diamonds → added to `stock_diamond` immediately
+- 7 days × 20 diamonds/day = 140 diamonds → delivered over time
+- Total value: 220 diamonds
+
+`pending_wdp` stores the **timed portion** at 100 units per day:
+
+- 1 WDP pass = 7 days × 100 = 700 stored in `pending_wdp`
+- This ratio is used for two conversions:
+  1. **Forecast display**: `pending_wdp / 100` → days → `days × 20` → potential diamonds (conservative)
+  2. **Surplus settlement**: surplus WDP days × 100 → diamond value (in `apply_topup_success`)
+
+Implementation rule:
+
+- inbound WDP day counts must be converted to storage units before they are compared against or deducted from `pending_wdp`
+- settlement helpers should operate on storage units internally so partial legacy balances remain mathematically consistent
+
+The 100-per-day storage ratio exists to support the legacy settlement flow. It does **not** mean "1 WDP = 100 diamonds".
+
+Because legacy settlement can reduce `pending_wdp` by non-100 increments, Inventory must not present `pending_wdp` as an exact calendar-day counter. Any day conversion shown in UI is approximate and informational only.
 
 ## 4. The Reconciliation Loop
 

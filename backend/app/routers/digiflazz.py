@@ -12,10 +12,13 @@ from sqlmodel import select
 
 from app.core.database import get_session
 from app.core.models import Account, TopupHistory, TopupHistoryResponse, CostPrice, CostPriceUpdate, CostPriceResponse, RestockQueue
+from app.services.account_service import SKU_MAP
 from app.services.digiflazz_service import DigiflazzService
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_TOPUP_TYPES = {"REGULAR", "LUNASI", "BULK"}
 
 router = APIRouter()
 
@@ -223,10 +226,31 @@ async def create_topup(
             detail=f"Account '{account.name}' is not active",
         )
 
+    topup_type = request.type.upper().strip()
+    if topup_type not in ALLOWED_TOPUP_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid topup type: {request.type}",
+        )
+
+    if request.sku not in SKU_MAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown SKU: {request.sku}",
+        )
+
+    if topup_type == "LUNASI" and account.pending_wdp <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Account '{account.name}' has no tracked legacy WDP to settle"
+            ),
+        )
+
     # Generate unique ref_id
     ref_id = f"TOP-{str(uuid4())[:8]}"
     logger.info(
-        f"Creating topup {ref_id} for account {account.name} with SKU {request.sku}"
+        f"Creating {topup_type} topup {ref_id} for account {account.name} with SKU {request.sku}"
     )
 
     try:
@@ -262,7 +286,7 @@ async def create_topup(
             sku=request.sku,
             amount_diamond=amount_diamond,
             status="PENDING",
-            type=request.type,
+            type=topup_type,
             is_processed=False,
             response_payload=json.dumps(digiflazz_response),
         )

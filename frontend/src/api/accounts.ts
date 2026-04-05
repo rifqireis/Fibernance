@@ -12,12 +12,13 @@ export interface Account {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  deficit_diamond: number;
   // Computed fields from backend
   real_diamond: number; // Current stock_diamond
-  potential_diamond: number; // stock_diamond + wdp potential
-  wdp_potential_capped: number; // WDP potential (max 140)
-  classification: string; // "Available" | "Forecast" | "Preorder"
-  deficit_diamond: number;
+  potential_diamond: number; // stock_diamond + conservative WDP forecast
+  wdp_potential_capped: number; // Conservative WDP forecast contribution (max 140)
+  tracked_wdp_days_approx: number; // Approximate day-equivalent for legacy pending_wdp storage units
+  classification: string; // Inventory label derived from real and forecast values
 }
 
 export interface CreateAccountPayload {
@@ -54,13 +55,3 @@ export const updateAccount = async (
   const response = await apiClient.patch(`/api/accounts/${id}`, payload);
   return response.data;
 };
-
-interface CreateAccountPayload {
-  name: string;
-  game_id: string;
-  zone: string;
-  server_id: string;
-  stock_diamond: number;
-  pending_wdp: number;
-  is_active: boolean;
-}

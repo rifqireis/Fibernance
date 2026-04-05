@@ -9,6 +9,7 @@ from app.core.models import Account, AccountCreate, AccountResponse, AccountUpda
 from app.services.account_service import (
     calculate_real_diamond,
     calculate_potential_diamond,
+    calculate_tracked_wdp_days_approx,
     calculate_wdp_potential,
     classify_account,
 )
@@ -33,6 +34,7 @@ def account_to_response(account: Account) -> AccountResponse:
         real_diamond=calculate_real_diamond(account),
         potential_diamond=calculate_potential_diamond(account),
         wdp_potential_capped=calculate_wdp_potential(account),
+        tracked_wdp_days_approx=calculate_tracked_wdp_days_approx(account),
         classification=classify_account(account),
     )
 

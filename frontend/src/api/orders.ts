@@ -98,23 +98,6 @@ export const useCreateComboOrder = () => {
 };
 
 /**
- * React Query mutation hook for finishing an order.
- * Automatically invalidates orders query on success.
- */
-export const useFinishOrder = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: finishOrder,
-    onSuccess: (data) => {
-      // Invalidate orders query to refresh order list
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      return data;
-    },
-  });
-};
-
-/**
  * React Query mutation hook for cancelling an order.
  * Automatically invalidates accounts and orders queries on success.
  */

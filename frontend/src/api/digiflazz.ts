@@ -1,6 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from './client';
 
+export type DigiflazzTopupType = 'REGULAR' | 'LUNASI' | 'BULK';
+
+export interface DigiflazzTopupRequest {
+  account_id: number;
+  sku: string;
+  type: DigiflazzTopupType;
+}
+
+export interface TopupHistoryItem {
+  id: string;
+  account_id: number;
+  ref_id: string;
+  sku: string;
+  amount_diamond: number;
+  status: string;
+  type: DigiflazzTopupType | string;
+  is_processed: boolean;
+  response_payload: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PurchaseQueueItem {
   id: string;
   account_id: number;
@@ -11,6 +33,13 @@ export interface PurchaseQueueItem {
   created_at: string;
   updated_at: string;
 }
+
+export const createDigiflazzTopup = async (
+  payload: DigiflazzTopupRequest
+): Promise<TopupHistoryItem> => {
+  const response = await apiClient.post<TopupHistoryItem>('/api/digiflazz/topup', payload);
+  return response.data;
+};
 
 export const fetchPurchaseQueue = async (): Promise<PurchaseQueueItem[]> => {
   const response = await apiClient.get<PurchaseQueueItem[]>('/api/digiflazz/queue');

@@ -13,8 +13,25 @@ const inventoryUnderlineInputClass =
   'h-auto border-0 border-b border-gray-300 bg-transparent px-0 py-2 focus:border-black focus:ring-0';
 
 const inventoryPrimaryButtonClass = 'h-auto px-6 py-2 text-sm';
-const inventoryStepButtonClass = 'h-auto px-3 py-1 text-xs';
 const inventoryModalActionClass = 'h-auto flex-1 px-6 py-2 text-sm';
+const inventoryInfoCardClass = 'border-gray-200 bg-gray-50 p-4';
+
+const formatTrackedWdpBalance = (pendingWdp: number, approximateDays: number) => {
+  const formattedDays = Number.isInteger(approximateDays)
+    ? approximateDays.toLocaleString()
+    : approximateDays.toFixed(1);
+  const dayLabel = approximateDays === 1 ? 'day' : 'days';
+
+  return `${pendingWdp.toLocaleString()} units (~${formattedDays} ${dayLabel})`;
+};
+
+const getForecastCaption = (account: Account) => {
+  if (account.wdp_potential_capped <= 0) {
+    return 'Real stock only';
+  }
+
+  return `Includes +${account.wdp_potential_capped.toLocaleString()} tracked WDP forecast`;
+};
 
 const Inventory: React.FC = () => {
   const { data: accounts, isLoading, error } = useAccounts();
@@ -80,7 +97,12 @@ const Inventory: React.FC = () => {
       <div className="border-b border-gray-200 px-4 lg:px-8 py-6 lg:py-12 flex items-start justify-between">
         <div>
           <h1 className="text-4xl font-serif font-semibold text-black">Inventory</h1>
-          <p className="mt-2 text-sm text-gray-600 font-sans">Account overview and diamond stock management</p>
+          <p className="mt-2 text-sm text-gray-600 font-sans">
+            Account overview, real stock, tracked WDP forecast, and restock deficits
+          </p>
+          <p className="mt-4 text-xs uppercase tracking-[0.24em] text-gray-500 font-sans">
+            Cashier uses real stock only. WDP stays informational in Inventory.
+          </p>
         </div>
         <Button
           onClick={() => setIsModalOpen(true)}
@@ -100,10 +122,10 @@ const Inventory: React.FC = () => {
                 {/* Table Header */}
                 <div className="grid grid-cols-5 gap-6 px-6 py-4 bg-gray-50 border-b border-gray-300">
                   <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Account</div>
-                  <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Real Diamond</div>
-                  <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Potential Diamond</div>
+                  <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Real Stock</div>
+                  <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Forecast Total</div>
                   <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Classification</div>
-                  <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Status</div>
+                  <div className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide">Supply State</div>
                 </div>
 
                 {/* Table Rows */}
@@ -227,15 +249,15 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
         {/* Card Details - Expandable */}
         {isExpanded && (
           <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 space-y-3">
-            {/* Potential Diamond */}
+            {/* Forecast Total */}
             <div>
-              <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Potential Diamond</p>
-              <div className="flex items-baseline gap-2">
-                <p className="font-serif text-lg font-semibold text-black">{account.potential_diamond.toLocaleString()}</p>
-                {account.wdp_potential_capped > 0 && (
-                  <span className="text-xs text-gray-600 font-sans">+{account.wdp_potential_capped}</span>
-                )}
-              </div>
+              <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Forecast Total</p>
+              <p className="font-serif text-lg font-semibold text-black">
+                {account.potential_diamond.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-gray-500 font-sans">
+                {getForecastCaption(account)}
+              </p>
             </div>
 
             {/* Classification Badge */}
@@ -248,9 +270,14 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
             <div>
               <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Status</p>
               <div className="space-y-1">
-                {account.pending_wdp > 0 && (
+                {account.deficit_diamond > 0 && (
                   <p className="text-sm text-black font-sans font-semibold">
-                    Debt: {Math.ceil(account.pending_wdp / 100)} days
+                    Deficit: {account.deficit_diamond.toLocaleString()} diamond
+                  </p>
+                )}
+                {account.pending_wdp > 0 && (
+                  <p className="text-xs text-gray-600 font-sans">
+                    Tracked WDP: {formatTrackedWdpBalance(account.pending_wdp, account.tracked_wdp_days_approx)}
                   </p>
                 )}
                 <p className="text-xs text-gray-500 font-sans">{account.is_active ? 'Active' : 'Inactive'}</p>
@@ -296,20 +323,15 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
         </div>
       </div>
 
-      {/* Potential Diamond (Stock + WDP) */}
+      {/* Forecast Total (Real Stock + WDP Forecast) */}
       <div className="flex items-center">
         <div className="text-left">
-          <div className="flex items-baseline gap-2">
-            <p className="font-serif text-2xl font-semibold text-black">
-              {account.potential_diamond.toLocaleString()}
-            </p>
-            {account.wdp_potential_capped > 0 && (
-              <span className="text-xs text-gray-600 font-sans">
-                +{account.wdp_potential_capped}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-gray-500 font-sans mt-1">potential</p>
+          <p className="font-serif text-2xl font-semibold text-black">
+            {account.potential_diamond.toLocaleString()}
+          </p>
+          <p className="text-xs text-gray-500 font-sans mt-1">
+            {getForecastCaption(account)}
+          </p>
         </div>
       </div>
 
@@ -321,9 +343,14 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onEdit, isMobile, isEx
       {/* Debt & Active Status */}
       <div className="flex flex-col justify-center gap-3">
         <div className="space-y-1">
-          {account.pending_wdp > 0 && (
+          {account.deficit_diamond > 0 && (
             <p className="text-sm text-black font-sans font-semibold">
-              Debt: {Math.ceil(account.pending_wdp / 100)} days
+              Deficit: {account.deficit_diamond.toLocaleString()} diamond
+            </p>
+          )}
+          {account.pending_wdp > 0 && (
+            <p className="text-xs text-gray-600 font-sans">
+              Tracked WDP: {formatTrackedWdpBalance(account.pending_wdp, account.tracked_wdp_days_approx)}
             </p>
           )}
           <p className="text-xs text-gray-500 font-sans">
@@ -358,7 +385,6 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
   const [zone, setZone] = useState('');
   const [serverId, setServerId] = useState('');
   const [stockDiamond, setStockDiamond] = useState(0);
-  const [wdpDays, setWdpDays] = useState(0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -374,7 +400,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
       zone: zone.trim(),
       server_id: serverId.trim(),
       stock_diamond: Math.max(0, stockDiamond),
-      pending_wdp: Math.max(0, wdpDays * 100), // Convert days to WDP
+      pending_wdp: 0,
       is_active: true,
     });
   };
@@ -473,49 +499,18 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({
             />
           </div>
 
-          {/* WDP Days */}
-          <div>
-            <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
-              WDP Days
-            </label>
-            <Input
-              type="number"
-              value={wdpDays}
-              onChange={(e) => setWdpDays(Math.max(0, parseInt(e.target.value) || 0))}
-              placeholder="0"
-              min="0"
-              className={inventoryUnderlineInputClass}
-              disabled={isLoading}
-            />
-            <p className="text-xs text-gray-500 font-sans mt-2">
-              1 day equals 20 diamonds. 1 WDP equals 80 instant diamonds plus 7 WDP days.
+          <Card className={inventoryInfoCardClass}>
+            <p className="text-xs font-semibold text-charcoal uppercase tracking-wide">
+              WDP Tracking
             </p>
-            <div className="flex gap-2 mt-3">
-              <Button
-                type="button"
-                onClick={() => {
-                  setStockDiamond((prev) => prev + 80);
-                  setWdpDays((prev) => prev + 7);
-                }}
-                className={inventoryStepButtonClass}
-                disabled={isLoading}
-              >
-                + 1 WDP
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setStockDiamond((prev) => Math.max(0, prev - 80));
-                  setWdpDays((prev) => Math.max(0, prev - 7));
-                }}
-                variant="secondary"
-                className={inventoryStepButtonClass}
-                disabled={isLoading}
-              >
-                - 1 WDP
-              </Button>
-            </div>
-          </div>
+            <p className="mt-2 text-sm font-sans text-black">
+              New accounts start with zero tracked WDP balance.
+            </p>
+            <p className="mt-2 text-xs text-gray-600 font-sans">
+              Record purchased Weekly Diamond Pass through Digiflazz top-ups or legacy
+              settlement flows, not manual Inventory edits.
+            </p>
+          </Card>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-200">
@@ -559,7 +554,6 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const [zone, setZone] = useState(account.zone);
   const [serverId, setServerId] = useState(account.server_id);
   const [stockDiamond, setStockDiamond] = useState(account.stock_diamond);
-  const [wdpDays, setWdpDays] = useState(Math.ceil(account.pending_wdp / 100));
   const [isActive, setIsActive] = useState(account.is_active);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -576,7 +570,6 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
       zone: zone.trim(),
       server_id: serverId.trim(),
       stock_diamond: Math.max(0, stockDiamond),
-      pending_wdp: Math.max(0, wdpDays * 100),
       is_active: isActive,
     });
   };
@@ -675,48 +668,37 @@ const EditAccountModal: React.FC<EditAccountModalProps> = ({
             />
           </div>
 
-          {/* WDP Days */}
-          <div>
-            <label className="text-xs font-semibold text-charcoal font-sans uppercase tracking-wide mb-2 block">
-              WDP Days
-            </label>
-            <Input
-              type="number"
-              value={wdpDays}
-              onChange={(e) => setWdpDays(Math.max(0, parseInt(e.target.value) || 0))}
-              placeholder="0"
-              min="0"
-              className={inventoryUnderlineInputClass}
-              disabled={isLoading}
-            />
-            <p className="text-xs text-gray-500 font-sans mt-2">
-              1 day equals 20 diamonds. 1 WDP equals 80 instant diamonds plus 7 WDP days.
-            </p>
-            <div className="flex gap-2 mt-3">
-              <Button
-                type="button"
-                onClick={() => {
-                  setStockDiamond((prev) => prev + 80);
-                  setWdpDays((prev) => prev + 7);
-                }}
-                className={inventoryStepButtonClass}
-                disabled={isLoading}
-              >
-                + 1 WDP
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setStockDiamond((prev) => Math.max(0, prev - 80));
-                  setWdpDays((prev) => Math.max(0, prev - 7));
-                }}
-                variant="secondary"
-                className={inventoryStepButtonClass}
-                disabled={isLoading}
-              >
-                - 1 WDP
-              </Button>
-            </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Card className={inventoryInfoCardClass}>
+              <p className="text-xs font-semibold text-charcoal uppercase tracking-wide">
+                Tracked WDP Balance
+              </p>
+              <p className="mt-2 font-serif text-xl font-semibold text-black">
+                {account.pending_wdp.toLocaleString()} units
+              </p>
+              <p className="mt-2 text-xs text-gray-600 font-sans">
+                {account.pending_wdp > 0
+                  ? `${formatTrackedWdpBalance(account.pending_wdp, account.tracked_wdp_days_approx)} and contributes +${account.wdp_potential_capped.toLocaleString()} forecast diamonds.`
+                  : 'No purchased WDP is currently tracked on this account.'}
+              </p>
+              <p className="mt-3 text-xs text-gray-500 font-sans">
+                Read-only in Inventory. Update through Digiflazz top-ups and legacy
+                settlement bookkeeping.
+              </p>
+            </Card>
+
+            <Card className={inventoryInfoCardClass}>
+              <p className="text-xs font-semibold text-charcoal uppercase tracking-wide">
+                Current Deficit
+              </p>
+              <p className="mt-2 font-serif text-xl font-semibold text-black">
+                {account.deficit_diamond.toLocaleString()} diamond
+              </p>
+              <p className="mt-2 text-xs text-gray-600 font-sans">
+                Shortages are created by order demand and resolved through the purchase
+                queue, not by editing forecast fields.
+              </p>
+            </Card>
           </div>
 
           {/* Is Active Status */}

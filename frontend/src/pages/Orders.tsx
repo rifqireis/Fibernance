@@ -13,6 +13,119 @@ const modalToggleButtonClass = 'h-auto px-3 py-1 text-xs font-semibold uppercase
 
 const modalHeaderButtonClass = 'h-auto px-3 py-2 text-xs uppercase tracking-wide';
 
+type OrdersTab = 'active' | 'history';
+type OrderStatusVariant = 'success' | 'warning' | 'error' | 'neutral';
+
+interface OrderStatusMeta {
+  label: string;
+  variant: OrderStatusVariant;
+  tab: OrdersTab;
+  canFinish?: boolean;
+  canCancel?: boolean;
+  showCountdown?: boolean;
+}
+
+const detailLabelClass =
+  'mb-1 text-[11px] font-semibold font-sans uppercase tracking-[0.18em] text-gray-500';
+
+const detailValueClass = 'text-sm font-sans text-black';
+
+const ORDER_STATUS_META: Record<string, OrderStatusMeta> = {
+  PENDING: {
+    label: 'Pending',
+    variant: 'neutral',
+    tab: 'active',
+    canFinish: true,
+    canCancel: true,
+    showCountdown: true,
+  },
+  WAITING_FRIEND_ADD: {
+    label: 'Waiting Friend',
+    variant: 'neutral',
+    tab: 'active',
+    canCancel: true,
+    showCountdown: true,
+  },
+  FRIEND_DELAY_ACTIVE: {
+    label: 'Friend Delay',
+    variant: 'warning',
+    tab: 'active',
+    canCancel: true,
+    showCountdown: true,
+  },
+  AWAITING_RESTOCK: {
+    label: 'Awaiting Restock',
+    variant: 'warning',
+    tab: 'active',
+    canCancel: true,
+  },
+  READY_TO_GIFT: {
+    label: 'Ready to Gift',
+    variant: 'success',
+    tab: 'active',
+    canFinish: true,
+    canCancel: true,
+  },
+  DONE: {
+    label: 'Done',
+    variant: 'success',
+    tab: 'history',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    variant: 'error',
+    tab: 'history',
+  },
+};
+
+const getOrderStatusMeta = (status: string): OrderStatusMeta => {
+  if (ORDER_STATUS_META[status]) {
+    return ORDER_STATUS_META[status];
+  }
+
+  if (status === 'DONE' || status === 'CANCELLED') {
+    return {
+      label: status.replace(/_/g, ' '),
+      variant: status === 'DONE' ? 'success' : 'error',
+      tab: 'history',
+    };
+  }
+
+  return {
+    label: status.replace(/_/g, ' '),
+    variant: 'neutral',
+    tab: 'active',
+    canCancel: true,
+  };
+};
+
+const isActiveOrder = (status: string): boolean => getOrderStatusMeta(status).tab === 'active';
+
+const isHistoryOrder = (status: string): boolean => getOrderStatusMeta(status).tab === 'history';
+
+const canFinishOrder = (status: string): boolean => Boolean(getOrderStatusMeta(status).canFinish);
+
+const canCancelOrder = (status: string): boolean => Boolean(getOrderStatusMeta(status).canCancel);
+
+const shouldShowCountdown = (status: string): boolean => Boolean(getOrderStatusMeta(status).showCountdown);
+
+const getStatusBadge = (status: string, size: 'default' | 'compact' = 'default') => {
+  const meta = getOrderStatusMeta(status);
+
+  return (
+    <Badge
+      variant={meta.variant}
+      className={
+        size === 'compact'
+          ? 'px-2 py-0.5 text-[10px] tracking-[0.14em]'
+          : undefined
+      }
+    >
+      {meta.label}
+    </Badge>
+  );
+};
+
 const Orders: React.FC = () => {
   const { data: orders, isLoading, error, refetch } = useQuery({
     queryKey: ['orders'],
@@ -26,7 +139,7 @@ const Orders: React.FC = () => {
   const [videoUploadOrder, setVideoUploadOrder] = useState<ComboOrderResponse | null>(null);
   const [showDeliveryNotification, setShowDeliveryNotification] = useState(false);
   const [deliveryNotificationOrder, setDeliveryNotificationOrder] = useState<ComboOrderResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [activeTab, setActiveTab] = useState<OrdersTab>('active');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'item' | 'diamond'>('date-desc');
@@ -123,16 +236,6 @@ const Orders: React.FC = () => {
     return formatDateTimeInWIB(dateString);
   };
 
-  const getStatusBadge = (status: string) => {
-    if (status === 'DONE') {
-      return <Badge variant="success">Done</Badge>;
-    } else if (status === 'CANCELLED') {
-      return <Badge variant="error">Cancelled</Badge>;
-    } else {
-      return <Badge variant="neutral">Pending</Badge>;
-    }
-  };
-
   // Search logic - memoized for performance
   const searchOrders = (ordersToSearch: ComboOrderResponse[], term: string): ComboOrderResponse[] => {
     if (!term.trim()) return ordersToSearch;
@@ -178,6 +281,24 @@ const Orders: React.FC = () => {
     const filtered = searchOrders(orders, searchTerm);
     return sortOrders(filtered);
   }, [orders, searchTerm, sortBy, sortDirection]);
+
+  const activeOrderCount = useMemo(
+    () => filteredAndSortedOrders.filter((order) => isActiveOrder(order.status)).length,
+    [filteredAndSortedOrders],
+  );
+
+  const historyOrderCount = useMemo(
+    () => filteredAndSortedOrders.filter((order) => isHistoryOrder(order.status)).length,
+    [filteredAndSortedOrders],
+  );
+
+  const visibleOrders = useMemo(
+    () =>
+      filteredAndSortedOrders.filter((order) =>
+        activeTab === 'active' ? isActiveOrder(order.status) : isHistoryOrder(order.status),
+      ),
+    [activeTab, filteredAndSortedOrders],
+  );
 
   return (
     <div className="min-h-screen bg-white animate-fade-slide-up">
@@ -284,7 +405,7 @@ const Orders: React.FC = () => {
                     : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
                 )}
               >
-                Active Orders ({filteredAndSortedOrders.filter((o) => o.status === 'PENDING').length})
+                Active ({activeOrderCount})
               </Button>
               <Button
                 onClick={() => setActiveTab('history')}
@@ -296,7 +417,7 @@ const Orders: React.FC = () => {
                     : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
                 )}
               >
-                History ({filteredAndSortedOrders.filter((o) => o.status !== 'PENDING').length})
+                History ({historyOrderCount})
               </Button>
             </div>
 
@@ -332,13 +453,7 @@ const Orders: React.FC = () => {
 
                 {/* Table Body */}
                 <tbody>
-                  {filteredAndSortedOrders
-                    .filter((order) =>
-                      activeTab === 'active'
-                        ? order.status === 'PENDING'
-                        : order.status !== 'PENDING'
-                    )
-                    .map((order, idx) => (
+                  {visibleOrders.map((order, idx) => (
                       <tr
                         key={order.id}
                         className={`border-b border-gray-200 ${
@@ -380,8 +495,7 @@ const Orders: React.FC = () => {
                         {/* Actions */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            {/* Finish Button - Only show for PENDING */}
-                            {order.status === 'PENDING' && (
+                            {canFinishOrder(order.status) && (
                               <Button
                                 onClick={() => handleFinish(order)}
                                 disabled={false}
@@ -391,8 +505,7 @@ const Orders: React.FC = () => {
                               </Button>
                             )}
 
-                            {/* Cancel Button - Only show for PENDING */}
-                            {order.status === 'PENDING' && (
+                            {canCancelOrder(order.status) && (
                               <Button
                                 onClick={() => handleCancel(order.id)}
                                 disabled={cancelMutation.isPending}
@@ -421,191 +534,179 @@ const Orders: React.FC = () => {
 
             {/* Mobile: Compact Expandable Cards */}
             <div className="md:hidden space-y-3">
-              {filteredAndSortedOrders
-                .filter((order) =>
-                  activeTab === 'active'
-                    ? order.status === 'PENDING'
-                    : order.status !== 'PENDING'
-                )
-                .map((order) => (
+              {visibleOrders.map((order) => (
                   <Card key={order.id} className="overflow-hidden border-gray-200 p-0">
-                    {/* Card Header - Always Visible (Summary Info - Minimalis) */}
                     <button
                       onClick={() =>
                         setExpandedOrderId(expandedOrderId === order.id ? null : order.id)
                       }
-                      className="w-full px-4 py-2 flex flex-col gap-1.5 hover:bg-gray-50 transition-colors text-left"
+                      className="w-full px-3 py-3 text-left hover:bg-gray-50 transition-colors"
                     >
-                      {/* Row 1: Item + Status + Countdown (Right) */}
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-black text-sm truncate">{order.quantity}x {order.item_name}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold font-sans text-black">
+                            {order.quantity}x {order.item_name}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-sans uppercase tracking-[0.12em] text-gray-500">
+                            <span className="font-mono text-gray-700">{order.invoice_ref}</span>
+                            <span className="font-semibold text-black">{order.total_diamond.toLocaleString()} DM</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {getStatusBadge(order.status)}
-                          {/* Countdown Timer - Right side */}
-                          {order.status === 'PENDING' && (
-                            <div className="text-xs font-semibold text-white bg-black px-2 py-1 rounded-none whitespace-nowrap">
+                        <div className="flex flex-col items-end gap-1.5">
+                          {getStatusBadge(order.status, 'compact')}
+                          {shouldShowCountdown(order.status) && (
+                            <div className="border border-gray-300 px-2 py-0.5 text-[10px] font-semibold font-sans uppercase tracking-[0.14em] text-gray-700 whitespace-nowrap">
                               {calculateCountdown(order.actual_delivery_at)}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Row 2: Buyer | Game ID & Zone */}
-                      <div className="flex justify-between gap-2 text-xs text-gray-700">
-                        <div className="flex-1 min-w-0 truncate">
-                          <span className="font-semibold">Buyer:</span> {order.buyer_name}
+                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs font-sans text-gray-600">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-gray-800">{order.buyer_name}</p>
+                          <p className="truncate">{order.target_id} / {order.server_id}</p>
                         </div>
-                        <div className="flex-shrink-0 text-right">
-                          <span className="font-semibold">ID:</span> {order.target_id}
+                        <div className="text-right">
+                          <p>{formatDeliveryDate(order.actual_delivery_at)}</p>
                           {order.game_username && (
-                            <div className="text-xs">@{order.game_username}</div>
+                            <p className="truncate text-gray-500">@{order.game_username}</p>
                           )}
                         </div>
                       </div>
-
-                      {/* Row 3: Sending Accounts */}
-                      {order.sending_accounts && Object.keys(order.sending_accounts).length > 0 && (
-                        <div className="text-xs text-gray-700 truncate">
-                          <span className="font-semibold">Accounts:</span>{' '}
-                          {Object.entries(order.sending_accounts).map(([, accountData]: [string, any], idx) => {
-                            const accountName = typeof accountData === 'object' && accountData.name ? accountData.name : accountData;
-                            return (
-                              <span key={accountName}>
-                                {idx > 0 && ' • '}
-                                {accountName}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Row 4: Delivery Time */}
-                      <div className="text-xs text-gray-600">
-                        {formatDeliveryDate(order.actual_delivery_at)}
-                      </div>
                     </button>
 
-                    {/* Card Details - Expandable (Full Details) */}
                     {expandedOrderId === order.id && (
-                      <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 space-y-3">
-                        {/* Invoice Reference */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Invoice Reference</p>
-                          <p className="text-sm text-black font-mono">{order.invoice_ref}</p>
-                        </div>
-
-                        {/* Item Details */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Order Item</p>
-                          <p className="text-sm text-black">{order.quantity}x {order.item_name || 'N/A'}</p>
-                        </div>
-
-                        {/* Buyer Name */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Buyer Name</p>
-                          <p className="text-sm text-black">{order.buyer_name}</p>
-                        </div>
-
-                        {/* Game Account - Full Details */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Game Account (Target)</p>
-                          <div className="text-sm text-black space-y-1">
-                            <p><span className="font-semibold">Player ID:</span> {order.target_id}</p>
-                            {order.game_username && (
-                              <p><span className="font-semibold">Username:</span> {order.game_username}</p>
-                            )}
-                            <p><span className="font-semibold">Zone/Server:</span> {order.server_id}</p>
+                      <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                          <div className="min-w-0">
+                            <p className={detailLabelClass}>Invoice</p>
+                            <p className="truncate font-mono text-sm text-black">{order.invoice_ref}</p>
                           </div>
-                        </div>
 
-                        {/* Diamond Details */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Total Diamond</p>
-                          <p className="text-sm text-black font-semibold">{order.total_diamond.toLocaleString()}</p>
-                        </div>
+                          <div className="min-w-0">
+                            <p className={detailLabelClass}>Status</p>
+                            <div className="text-sm">{getStatusBadge(order.status)}</div>
+                          </div>
 
-                        {/* Processing Accounts - Full Details */}
-                        {order.sending_accounts && Object.keys(order.sending_accounts).length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Sending Accounts</p>
-                            <div className="text-sm text-black space-y-1">
-                              {Object.entries(order.sending_accounts).map(([accountId, accountData]: [string, any]) => {
-                                const accountName = typeof accountData === 'object' && accountData.name ? accountData.name : accountData;
-                                const deduction = order.deduction_breakdown[accountId] || 0;
-                                return (
-                                  <Card key={accountId} className="flex items-center justify-between border-gray-200 p-2">
-                                    <span className="font-semibold">{accountName}</span>
-                                    <span className="text-gray-600">{deduction.toLocaleString()}</span>
-                                  </Card>
-                                );
-                              })}
+                          <div className="min-w-0">
+                            <p className={detailLabelClass}>Item</p>
+                            <p className={detailValueClass}>{order.quantity}x {order.item_name || 'N/A'}</p>
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className={detailLabelClass}>Diamond</p>
+                            <p className="text-sm font-semibold font-sans text-black">{order.total_diamond.toLocaleString()}</p>
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className={detailLabelClass}>Buyer</p>
+                            <p className={cn(detailValueClass, 'truncate')}>{order.buyer_name}</p>
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className={detailLabelClass}>Delivery</p>
+                            <p className={detailValueClass}>{formatDeliveryDate(order.actual_delivery_at)}</p>
+                          </div>
+
+                          <div className="col-span-2 border-t border-gray-200 pt-3">
+                            <p className={cn(detailLabelClass, 'mb-2')}>Target</p>
+                            <div className="space-y-1 text-sm text-black">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-gray-600 font-sans">Player ID</span>
+                                <span className="font-semibold font-sans">{order.target_id}</span>
+                              </div>
+                              {order.game_username && (
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-gray-600 font-sans">Username</span>
+                                  <span className="font-semibold font-sans">{order.game_username}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-gray-600 font-sans">Zone/Server</span>
+                                <span className="font-semibold font-sans">{order.server_id}</span>
+                              </div>
                             </div>
                           </div>
-                        )}
 
-                        {/* Delivery Information */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Delivery Window</p>
-                          <p className="text-sm text-black">{formatDeliveryDate(order.actual_delivery_at)}</p>
-                        </div>
+                          {order.sending_accounts && Object.keys(order.sending_accounts).length > 0 && (
+                            <div className="col-span-2 border-t border-gray-200 pt-3">
+                              <p className={cn(detailLabelClass, 'mb-2')}>Sending Accounts</p>
+                              <div className="space-y-1.5">
+                                {Object.entries(order.sending_accounts).map(([accountId, accountData]: [string, any]) => {
+                                  const accountName = typeof accountData === 'object' && accountData.name ? accountData.name : accountData;
+                                  const deduction = typeof accountData === 'object' && typeof accountData.deduction === 'number'
+                                    ? accountData.deduction
+                                    : order.deduction_breakdown[accountName] || order.deduction_breakdown[accountId] || 0;
 
-                        {/* Order Status */}
-                        <div>
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-1">Order Status</p>
-                          <div className="text-sm">
-                            {getStatusBadge(order.status)}
+                                  return (
+                                    <div key={accountId} className="flex items-center justify-between border border-gray-200 bg-white px-3 py-2">
+                                      <span className="truncate text-sm font-semibold font-sans text-black">{accountName}</span>
+                                      <span className="text-xs font-semibold font-sans uppercase tracking-[0.14em] text-gray-500">{deduction.toLocaleString()}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="col-span-2 border-t border-gray-200 pt-3">
+                            <p className={cn(detailLabelClass, 'mb-2')}>Metadata</p>
+                            <div className="grid grid-cols-2 gap-3 text-xs font-sans text-gray-600">
+                              <p><span className="font-semibold">Created:</span> {formatDeliveryDate(order.created_at)}</p>
+                              <p><span className="font-semibold">Updated:</span> {formatDeliveryDate(order.updated_at)}</p>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Order Timestamps */}
-                        <div className="border-t border-gray-200 pt-2">
-                          <p className="text-xs font-semibold text-charcoal uppercase tracking-wide mb-2">Metadata</p>
-                          <div className="text-xs text-gray-600 space-y-1">
-                            <p><span className="font-semibold">Created:</span> {formatDeliveryDate(order.created_at)}</p>
-                            <p><span className="font-semibold">Updated:</span> {formatDeliveryDate(order.updated_at)}</p>
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex flex-col gap-2 pt-2 border-t border-gray-300">
-                          <div className="flex gap-2">
-                            {order.status === 'PENDING' && (
-                              <>
-                                <Button
-                                  onClick={() => handleFinish(order)}
-                                  disabled={false}
-                                  className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
-                                >
-                                  Finish Order
-                                </Button>
-                                <Button
-                                  onClick={() => handleCancel(order.id)}
-                                  disabled={cancelMutation.isPending}
-                                  variant="danger"
-                                  className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
-                                >
-                                  {cancelMutation.isPending ? 'Cancelling' : 'Cancel Order'}
-                                </Button>
-                              </>
-                            )}
-                            {order.status === 'DONE' && (
+                        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-300 pt-3">
+                          {canFinishOrder(order.status) && (
+                            <>
                               <Button
-                                onClick={() => handleFinishPrint(order)}
-                                className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
+                                onClick={() => handleFinish(order)}
+                                disabled={false}
+                                className={actionButtonClass}
                               >
-                                Delivery Notice
+                                Finish
                               </Button>
-                            )}
+                              <Button
+                                onClick={() => handleCancel(order.id)}
+                                disabled={cancelMutation.isPending}
+                                variant="danger"
+                                className={actionButtonClass}
+                              >
+                                {cancelMutation.isPending ? 'Cancelling' : 'Cancel'}
+                              </Button>
+                            </>
+                          )}
+                          {!canFinishOrder(order.status) && canCancelOrder(order.status) && (
                             <Button
-                              onClick={() => handlePrint(order)}
-                              variant="secondary"
-                              className="h-auto flex-1 px-3 py-2 text-xs uppercase tracking-wide"
+                              onClick={() => handleCancel(order.id)}
+                              disabled={cancelMutation.isPending}
+                              variant="danger"
+                              className={cn(actionButtonClass, 'col-span-2')}
                             >
-                              Print
+                              {cancelMutation.isPending ? 'Cancelling' : 'Cancel'}
                             </Button>
-                          </div>
+                          )}
+                          {order.status === 'DONE' && (
+                            <Button
+                              onClick={() => handleFinishPrint(order)}
+                              className={actionButtonClass}
+                            >
+                              Notice
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => handlePrint(order)}
+                            variant="secondary"
+                            className={cn(
+                              actionButtonClass,
+                              order.status === 'DONE' ? 'col-span-1' : 'col-span-2'
+                            )}
+                          >
+                            Print
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -792,59 +893,8 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) => {
   const [language, setLanguage] = React.useState<'id' | 'en'>('en');
   const receiptRef = React.useRef<HTMLDivElement>(null);
 
-  // Determine mode: INVOICE for PENDING, RECEIPT for DONE/CANCELLED
-  const mode = order.status === 'PENDING' ? 'invoice' : 'receipt';
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-    
-    // Parse UTC date and convert to WIB (UTC+7)
-    const utcDate = new Date(dateString);
-    
-    // Extract UTC components
-    let dayNum = utcDate.getUTCDate();
-    let monthNum = utcDate.getUTCMonth();
-    let year = utcDate.getUTCFullYear();
-    let dayOfWeek = utcDate.getUTCDay();
-    let hours = utcDate.getUTCHours();
-    const minutes = utcDate.getUTCMinutes();
-    const seconds = utcDate.getUTCSeconds();
-    
-    // Add 7 hours for WIB timezone
-    hours += 7;
-    
-    // Handle day overflow (if hours >= 24)
-    if (hours >= 24) {
-      hours -= 24;
-      dayOfWeek = (dayOfWeek + 1) % 7; // Next day of week
-      dayNum += 1;
-      
-      // Handle month/year overflow
-      const daysInMonth = new Date(year, monthNum + 1, 0).getDate();
-      if (dayNum > daysInMonth) {
-        dayNum = 1;
-        monthNum += 1;
-        if (monthNum > 11) {
-          monthNum = 0;
-          year += 1;
-        }
-      }
-    }
-    
-    const hoursStr = hours.toString().padStart(2, '0');
-    const minutesStr = minutes.toString().padStart(2, '0');
-    const secondsStr = seconds.toString().padStart(2, '0');
-    
-    if (language === 'id') {
-      const daysID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-      const monthsID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-      return `${daysID[dayOfWeek]}, ${dayNum} ${monthsID[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr}`;
-    } else {
-      const daysEN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const monthsEN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      return `${daysEN[dayOfWeek]}, ${dayNum} ${monthsEN[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr}`;
-    }
-  };
+  // Determine mode: active orders use invoice format, history orders use receipt format.
+  const mode = isActiveOrder(order.status) ? 'invoice' : 'receipt';
 
   // Format date for receipt - compact format
   // ID: DD/M/YYYY, HH.mm WIB (WIB time)
@@ -882,93 +932,8 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) => {
     return `${month}/${day}/${year}, ${hoursStr}.${minutesStr} UTC`;
   };
 
-  // Convert WIB datetime to UTC format for receipt display
-  // Backend sends naive ISO datetime in WIB (e.g., "2026-04-05T15:00:00")
-  // Convert to UTC by subtracting 7 hours
-  const formatDateUTC = (wibDateString: string | undefined): string => {
-    if (!wibDateString) return 'N/A';
-    
-    // Parse WIB datetime (naive, treat as local)
-    const wibDate = new Date(wibDateString);
-    
-    // Extract WIB components
-    let dayNum = wibDate.getDate();
-    let monthNum = wibDate.getMonth();
-    let year = wibDate.getFullYear();
-    let dayOfWeek = wibDate.getDay();
-    let hours = wibDate.getHours();
-    const minutes = wibDate.getMinutes();
-    const seconds = wibDate.getSeconds();
-    
-    // Convert WIB to UTC by subtracting 7 hours
-    hours -= 7;
-    
-    // Handle day underflow (if hours < 0)
-    if (hours < 0) {
-      hours += 24;
-      dayOfWeek = (dayOfWeek - 1 + 7) % 7; // Previous day of week
-      dayNum -= 1;
-      
-      // Handle month/year underflow
-      if (dayNum < 1) {
-        monthNum -= 1;
-        if (monthNum < 0) {
-          monthNum = 11;
-          year -= 1;
-        }
-        dayNum = new Date(year, monthNum + 1, 0).getDate();
-      }
-    }
-    
-    const hoursStr = hours.toString().padStart(2, '0');
-    const minutesStr = minutes.toString().padStart(2, '0');
-    const secondsStr = seconds.toString().padStart(2, '0');
-    
-    if (language === 'id') {
-      const daysID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-      const monthsID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-      return `${daysID[dayOfWeek]}, ${dayNum} ${monthsID[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr} UTC`;
-    } else {
-      const daysEN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const monthsEN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      return `${daysEN[dayOfWeek]}, ${dayNum} ${monthsEN[monthNum]} ${year} ${hoursStr}:${minutesStr}:${secondsStr} UTC`;
-    }
-  };
-
-  // Format date only (no time) for delivery notifications
-  // ID: DD/MM/YYYY
-  // EN: MM/DD/YYYY
-  const formatDeliveryDateOnly = (dateString: string | undefined): string => {
-    if (!dateString) return 'N/A';
-    
-    const date = new Date(dateString);
-    let day = date.getDate();
-    let month = date.getMonth() + 1;
-    const year = date.getFullYear();
-    
-    const dayStr = String(day).padStart(2, '0');
-    const monthStr = String(month).padStart(2, '0');
-    
-    if (language === 'id') {
-      return `${dayStr}/${monthStr}/${year}`;
-    } else {
-      return `${monthStr}/${dayStr}/${year}`;
-    }
-  };
 
   // Generate delivery notification text with template variables
-  const generateDeliveryNotification = (orderData: ComboOrderResponse): string => {
-    const item = `${orderData.quantity}x ${orderData.item_name}`;
-    const buyer = orderData.buyer_name;
-    const date = formatDeliveryDateOnly(orderData.delivery_at);
-    
-    if (language === 'id') {
-      return `Pesanan ${item} sudah dikirim. Terima kasih, ${buyer}.\n${date}`;
-    } else {
-      return `Order ${item} has been sent. Thank you, ${buyer}.\n${date}`;
-    }
-  };
-
   const getReceiptText = (): string => {
     const divider = '==============================';
     
@@ -1150,7 +1115,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ order, onClose }) =
     setError(null);
     
     try {
-      const response = await finishOrder(order.id, selectedFile);
+      await finishOrder(order.id, selectedFile);
       setSuccess(true);
       
       // Show success message for 2 seconds then close

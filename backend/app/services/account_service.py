@@ -12,8 +12,11 @@ from app.services.order_service import evaluate_order_readiness
 logger = logging.getLogger(__name__)
 
 # Constants
-WDP_TO_DIAMOND_RATIO = 100  # 1 WDP = 100 Diamond
-WDP_POTENTIAL_PER_DAY = 20  # Each WDP day generates 20 potential diamonds
+# pending_wdp storage: 100 units per WDP day.
+# 1 WDP pass = 80 instant diamonds + 7 days × 20 dm/day = 220 total.
+# pending_wdp stores the "day" portion only: 7 days × 100 = 700 per pass.
+WDP_TO_DIAMOND_RATIO = 100  # pending_wdp units per WDP day (storage ratio, NOT total value)
+WDP_POTENTIAL_PER_DAY = 20  # Each WDP day generates 20 potential diamonds (conservative forecast)
 WDP_POTENTIAL_CAP = 140  # Maximum potential from WDP (7 days * 20)
 STOCK_THRESHOLD_AVAILABLE = 300
 STOCK_THRESHOLD_FORECAST = 300
@@ -38,6 +41,24 @@ SKU_MAP = {
 }
 
 
+def wdp_days_to_storage_units(wdp_days: int) -> int:
+    """Convert WDP day count into legacy pending_wdp storage units."""
+
+    if wdp_days <= 0:
+        return 0
+
+    return wdp_days * WDP_TO_DIAMOND_RATIO
+
+
+def wdp_storage_units_to_days(pending_wdp: int) -> float:
+    """Convert legacy pending_wdp storage units into approximate WDP days."""
+
+    if pending_wdp <= 0:
+        return 0
+
+    return pending_wdp / WDP_TO_DIAMOND_RATIO
+
+
 # ============================================================================
 # COMPUTED FIELD CALCULATORS
 # ============================================================================
@@ -54,6 +75,12 @@ def calculate_real_diamond(account: Account) -> int:
         int: Current stock_diamond value
     """
     return account.stock_diamond
+
+
+def calculate_tracked_wdp_days_approx(account: Account) -> float:
+    """Return the approximate WDP day equivalent for legacy pending_wdp."""
+
+    return wdp_storage_units_to_days(account.pending_wdp)
 
 
 def calculate_wdp_potential(account: Account) -> int:
@@ -73,9 +100,9 @@ def calculate_wdp_potential(account: Account) -> int:
     if account.pending_wdp <= 0:
         return 0
 
-    # pending_wdp is in diamonds, convert to days then to potential
-    # 1 WDP = 100 diamonds, 1 WDP day = 20 potential diamonds
-    wdp_days = account.pending_wdp / WDP_TO_DIAMOND_RATIO
+    # Convert pending_wdp (stored at 100 units/day) to days, then to forecast potential.
+    # Example: pending_wdp=700 → 7 days → 7×20 = 140 potential diamonds.
+    wdp_days = wdp_storage_units_to_days(account.pending_wdp)
     wdp_potential = int(wdp_days * WDP_POTENTIAL_PER_DAY)
 
     # Cap at 140 (7 days max)
@@ -234,13 +261,15 @@ async def apply_topup_success(
 
     # Preserve the existing WDP bookkeeping flow for compatibility.
     if received_wdp_days > 0:
-        debt_payment = min(received_wdp_days, account.pending_wdp)
-        remaining_wdp = received_wdp_days - debt_payment
+        received_wdp_units = wdp_days_to_storage_units(received_wdp_days)
+        debt_payment_units = min(received_wdp_units, account.pending_wdp)
+        remaining_wdp_units = received_wdp_units - debt_payment_units
 
-        account.pending_wdp = max(0, account.pending_wdp - debt_payment)
+        account.pending_wdp = max(0, account.pending_wdp - debt_payment_units)
 
-        if remaining_wdp > 0:
-            available_diamonds += remaining_wdp * WDP_TO_DIAMOND_RATIO
+        if remaining_wdp_units > 0:
+            # Legacy settlement values remaining WDP days at the same 100-units/day ratio.
+            available_diamonds += remaining_wdp_units
 
     available_diamonds, resolved_order_ids = await _apply_deficit_payment(
         session=session,
@@ -330,6 +359,11 @@ async def apply_digiflazz_success(
     if not account.is_active:
         raise ValueError(f"Account {account.name} is not active")
 
+    if topup_type == "LUNASI" and account.pending_wdp <= 0:
+        raise ValueError(
+            f"Account {account.name} has no tracked legacy WDP to settle"
+        )
+
     # Apply type-specific logic
     if topup_type == "LUNASI":
         remaining_diamonds, resolved_order_ids = await _apply_deficit_payment(
@@ -353,7 +387,7 @@ async def apply_digiflazz_success(
 
         # Preserve the legacy WDP bookkeeping for compatibility.
         if sku_data["days"] > 0:
-            account.pending_wdp += (sku_data["days"] * 100)
+            account.pending_wdp += wdp_days_to_storage_units(sku_data["days"])
 
     # Mark as modified
     session.add(account)

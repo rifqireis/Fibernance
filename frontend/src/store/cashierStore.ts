@@ -5,7 +5,7 @@ import { create } from 'zustand';
  * Handles selection of accounts for combo orders and order details
  */
 
-interface CashierStore {
+export interface CashierStore {
   // State
   selectedAccounts: string[]; // Array of account IDs
   targetId: string;

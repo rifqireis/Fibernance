@@ -123,6 +123,7 @@ class AccountResponse(SQLModel):
     real_diamond: int
     potential_diamond: int
     wdp_potential_capped: int
+    tracked_wdp_days_approx: float
     classification: str
 
 

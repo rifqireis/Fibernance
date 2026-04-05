@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useAccounts } from '../api/accounts';
-import { usePurchaseQueue, type PurchaseQueueItem } from '../api/digiflazz';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAccounts, type Account } from '../api/accounts';
+import {
+  createDigiflazzTopup,
+  usePurchaseQueue,
+  type DigiflazzTopupRequest,
+  type PurchaseQueueItem,
+} from '../api/digiflazz';
 import { Badge, Button, Card, Input, Select, cn } from '../components/ui';
 
 const SKU_PRODUCTS = [
@@ -26,8 +32,13 @@ interface BalanceData {
 }
 
 interface FormProps {
-  accounts: any[] | undefined;
+  accounts: Account[] | undefined;
   isLoading: boolean;
+}
+
+interface SubmissionStatus {
+  tone: 'success' | 'error';
+  message: string;
 }
 
 const digiflazzTabButtonClass =
@@ -72,6 +83,61 @@ const formatQueueAge = (value: string): string => {
 const calculateMargin = (cost: number | null, market: number | null): string => {
   if (market === null || cost === null || cost === 0) return 'Not available';
   return `${(((market - cost) / cost) * 100).toFixed(1)}%`;
+};
+
+const formatTrackedWdpBalance = (
+  pendingWdp: number,
+  approximateDays: number
+): string => {
+  const formattedDays = Number.isInteger(approximateDays)
+    ? approximateDays.toLocaleString()
+    : approximateDays.toFixed(1);
+  const dayLabel = approximateDays === 1 ? 'day' : 'days';
+
+  return `${pendingWdp.toLocaleString()} units (~${formattedDays} ${dayLabel})`;
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === 'object' && error !== null) {
+    const apiError = error as {
+      message?: string;
+      response?: {
+        data?: {
+          detail?: string;
+        };
+      };
+    };
+
+    if (typeof apiError.response?.data?.detail === 'string') {
+      return apiError.response.data.detail;
+    }
+
+    if (typeof apiError.message === 'string') {
+      return apiError.message;
+    }
+  }
+
+  return fallback;
+};
+
+const SubmissionNotice: React.FC<{ status: SubmissionStatus | null }> = ({ status }) => {
+  if (!status) {
+    return null;
+  }
+
+  return (
+    <Card
+      className={cn(
+        'mt-6 p-4',
+        status.tone === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+      )}
+    >
+      <Badge variant={status.tone === 'success' ? 'success' : 'error'}>
+        {status.tone === 'success' ? 'Submitted' : 'Request Failed'}
+      </Badge>
+      <p className="mt-3 text-sm text-gray-700">{status.message}</p>
+    </Card>
+  );
 };
 
 const WDPPriceCard: React.FC<{
@@ -315,33 +381,57 @@ const WDPPriceCard: React.FC<{
 const TopupRegularForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedSku, setSelectedSku] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus | null>(null);
+  const queryClient = useQueryClient();
+
+  const topupMutation = useMutation({
+    mutationFn: async (payload: DigiflazzTopupRequest) => createDigiflazzTopup(payload),
+    onSuccess: (topup) => {
+      setSubmissionStatus({
+        tone: 'success',
+        message: `Regular top-up queued with ref ${topup.ref_id}. Digiflazz recorded the request as ${topup.status}.`,
+      });
+      setSelectedAccountId('');
+      setSelectedSku('');
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['digiflazz', 'queue'] });
+    },
+    onError: (error) => {
+      setSubmissionStatus({
+        tone: 'error',
+        message: getApiErrorMessage(error, 'Unable to submit the regular top-up.'),
+      });
+    },
+  });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!selectedAccountId || !selectedSku) {
-      alert('Select an account and a product before submitting.');
+      setSubmissionStatus({
+        tone: 'error',
+        message: 'Select an account and a product before submitting.',
+      });
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      alert('Regular top-up submitted.');
-      setSelectedAccountId('');
-      setSelectedSku('');
-    } catch (error) {
-      alert('Unable to submit the regular top-up.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setSubmissionStatus(null);
+    await topupMutation.mutateAsync({
+      account_id: Number(selectedAccountId),
+      sku: selectedSku,
+      type: 'REGULAR',
+    });
   };
 
   return (
     <div>
       <p className="section-label">Workflow</p>
       <h2 className="mt-2 text-2xl font-serif font-semibold text-black">Regular Top-up</h2>
-      <p className="mt-2 text-sm text-gray-600">Submit a standard stock top-up for a warehouse account.</p>
+      <p className="mt-2 text-sm text-gray-600">
+        Submit a standard supplier top-up. On success, incoming value clears explicit deficits first and only then reaches stock.
+      </p>
+
+      <SubmissionNotice status={submissionStatus} />
 
       {isLoading ? (
         <p className="mt-8 text-sm text-gray-600">Loading accounts...</p>
@@ -383,10 +473,10 @@ const TopupRegularForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
           <div className="border-t border-gray-200 pt-8">
             <Button
               type="submit"
-              disabled={isSubmitting || !selectedAccountId || !selectedSku}
+              disabled={topupMutation.isPending || !selectedAccountId || !selectedSku}
               className="h-auto w-full py-3 text-xs uppercase tracking-wide"
             >
-              {isSubmitting ? 'Processing' : 'Submit Regular Top-up'}
+              {topupMutation.isPending ? 'Submitting' : 'Submit Regular Top-up'}
             </Button>
           </div>
         </form>
@@ -398,35 +488,59 @@ const TopupRegularForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
 const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedSku, setSelectedSku] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus | null>(null);
+  const queryClient = useQueryClient();
 
   const accountsWithDebt = accounts?.filter((account) => account.pending_wdp > 0) ?? [];
+
+  const settlementMutation = useMutation({
+    mutationFn: async (payload: DigiflazzTopupRequest) => createDigiflazzTopup(payload),
+    onSuccess: (topup) => {
+      setSubmissionStatus({
+        tone: 'success',
+        message: `Legacy WDP settlement queued with ref ${topup.ref_id}. On success, supplier value resolves explicit deficits first, then legacy tracked WDP, then stock.`,
+      });
+      setSelectedAccountId('');
+      setSelectedSku('');
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['digiflazz', 'queue'] });
+    },
+    onError: (error) => {
+      setSubmissionStatus({
+        tone: 'error',
+        message: getApiErrorMessage(error, 'Unable to submit the legacy WDP settlement.'),
+      });
+    },
+  });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!selectedAccountId || !selectedSku) {
-      alert('Select a debt account and a product before submitting.');
+      setSubmissionStatus({
+        tone: 'error',
+        message: 'Select a tracked WDP account and a product before submitting.',
+      });
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      alert('Debt settlement submitted.');
-      setSelectedAccountId('');
-      setSelectedSku('');
-    } catch (error) {
-      alert('Unable to submit the debt settlement.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setSubmissionStatus(null);
+    await settlementMutation.mutateAsync({
+      account_id: Number(selectedAccountId),
+      sku: selectedSku,
+      type: 'LUNASI',
+    });
   };
 
   return (
     <div>
       <p className="section-label">Workflow</p>
-      <h2 className="mt-2 text-2xl font-serif font-semibold text-black">Debt Settlement</h2>
-      <p className="mt-2 text-sm text-gray-600">Apply incoming top-up value to outstanding WDP debt before stock.</p>
+      <h2 className="mt-2 text-2xl font-serif font-semibold text-black">Legacy WDP Settlement</h2>
+      <p className="mt-2 text-sm text-gray-600">
+        Use only for actual purchased WDP tracked in legacy bookkeeping. New shortages should be handled through the purchase queue.
+      </p>
+
+      <SubmissionNotice status={submissionStatus} />
 
       {isLoading ? (
         <p className="mt-8 text-sm text-gray-600">Loading accounts...</p>
@@ -442,12 +556,14 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
               <option value="">Select an account</option>
               {accountsWithDebt.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.name} ({account.game_id}) - Debt: {Math.ceil(account.pending_wdp / 100)} days
+                  {account.name} ({account.game_id}) - Tracked WDP: {formatTrackedWdpBalance(account.pending_wdp, account.tracked_wdp_days_approx)}
                 </option>
               ))}
             </Select>
             {accountsWithDebt.length === 0 && (
-              <p className="mt-2 text-xs text-gray-500">No accounts with debt are available.</p>
+              <p className="mt-2 text-xs text-gray-500">
+                No accounts with tracked legacy WDP are currently available.
+              </p>
             )}
           </div>
 
@@ -469,17 +585,17 @@ const DebtSettlementForm: React.FC<FormProps> = ({ accounts, isLoading }) => {
 
           <Card className="border-gray-200 bg-gray-50 p-4">
             <p className="text-xs text-gray-700">
-              Incoming diamonds are applied to pending WDP debt first. Any remainder is moved into stock.
+              Legacy settlement is secondary to the purchase queue. On success, incoming supplier value clears explicit deficits first, then legacy `pending_wdp`, then stock.
             </p>
           </Card>
 
           <div className="border-t border-gray-200 pt-8">
             <Button
               type="submit"
-              disabled={isSubmitting || !selectedAccountId || !selectedSku || accountsWithDebt.length === 0}
+              disabled={settlementMutation.isPending || !selectedAccountId || !selectedSku || accountsWithDebt.length === 0}
               className="h-auto w-full py-3 text-xs uppercase tracking-wide"
             >
-              {isSubmitting ? 'Processing' : 'Submit Debt Settlement'}
+              {settlementMutation.isPending ? 'Submitting' : 'Submit Legacy Settlement'}
             </Button>
           </div>
         </form>
@@ -802,7 +918,7 @@ const Digiflazz: React.FC = () => {
                 : 'border-transparent text-gray-600 hover:border-transparent hover:bg-transparent hover:text-black',
             )}
           >
-            Debt Settlement
+            Legacy WDP
           </Button>
           <Button
             type="button"
