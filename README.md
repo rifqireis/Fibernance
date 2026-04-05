@@ -1,6 +1,10 @@
-# Fibernance - Finance Tracker & Smart Cashier
+# Fibernance — Fiber Governance
 
-A modern, minimalist luxury web application for finance tracking, inventory management, and smart order processing for game top-up businesses. Built with FastAPI, React, and SQLite.
+**Fibernance** adalah sistem otomasi backend untuk memproses dan mengelola data pesanan dari platform **Tokoku** (Seller Panel dari [Itemku](https://itemku.com)). Sistem ini dirancang spesifik untuk mengeksekusi dan mencatat alur penjualan **Gift Item (7 hari)** pada kategori permainan **Mobile Legends**.
+
+Implementasi logika database ini secara signifikan menyederhanakan manajemen antrean pesanan, melacak status pengiriman tertunda, dan meminimalisir kesalahan pencatatan manual.
+
+Built with **FastAPI**, **React**, dan **SQLite**.
 
 ## ✨ Key Features
 
