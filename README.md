@@ -438,7 +438,7 @@ DATABASE_URL=sqlite+aiosqlite:///./fibernance.db
 
 # Telegram Configuration (for proof video upload)
 TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_CHANNEL_ID=-1003744041838
+TELEGRAM_CHANNEL_ID=-100xxxxxxxxxx
 
 # Application
 DEBUG=True
